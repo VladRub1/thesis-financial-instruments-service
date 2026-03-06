@@ -1,7 +1,55 @@
 [project]
 name = "thesis-financial-instruments-service"
 version = "0.1.0"
-description = "Add your description here"
+description = "Document AI PoC backend for Russian bank guarantee scans — OCR + LLM extraction"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2.0",
+    "pydantic-settings",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg",
+    "alembic",
+    "arq",
+    "redis",
+    "pytesseract",
+    "Pillow",
+    "pymupdf",
+    "llama-cpp-python",
+    "python-multipart",
+    "numpy",
+    "streamlit",
+    "watchdog>=6.0.0",
+    "paddleocr>=3.4.0",
+    "paddlepaddle>=3.3.0",
+]
+
+[project.optional-dependencies]
+paddle = [
+    "paddleocr",
+    "paddlepaddle",
+]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "aiosqlite",
+    "ruff",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
