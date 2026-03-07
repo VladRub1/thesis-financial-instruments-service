@@ -60,3 +60,6 @@ eval_report.json
 
 # Project — temp uploads
 /tmp_uploads/
+
+# Todo file
+todo.md
