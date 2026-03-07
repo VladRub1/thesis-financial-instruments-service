@@ -38,6 +38,23 @@ def get_ocr_engine(name: str, lang: str = "rus+eng") -> OCREngine:
 
 
 def pdf_to_images(pdf_path: Path) -> list[tuple[Image.Image, int]]:
+    suffix = pdf_path.suffix.lower()
+
+    if suffix in (".tif", ".tiff"):
+        img = Image.open(str(pdf_path))
+        pages: list[tuple[Image.Image, int]] = []
+        for i in range(getattr(img, "n_frames", 1)):
+            img.seek(i)
+            frame = img.copy().convert("RGB")
+            dpi_info = img.info.get("dpi", (_RENDER_DPI, _RENDER_DPI))
+            dpi = int(dpi_info[0]) if isinstance(dpi_info, (tuple, list)) else int(dpi_info)
+            pages.append((frame, dpi))
+        return pages
+
+    if suffix in (".png", ".jpg", ".jpeg"):
+        img = Image.open(str(pdf_path)).convert("RGB")
+        return [(img, _RENDER_DPI)]
+
     doc = fitz.open(str(pdf_path))
     images: list[tuple[Image.Image, int]] = []
     for page in doc:

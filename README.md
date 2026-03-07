@@ -196,15 +196,182 @@ uv run python -m app.cli.ocr \
   --out bulk_manifest.json
 ```
 
-### Evaluation scaffold
+## Validation & Metrics
+
+A standalone CLI subsystem for systematic evaluation of OCR + extraction quality against a ground-truth dataset.
+
+### What it does
+
+1. **Samples** N documents reproducibly from `dataset.csv` (the ground-truth table of ~33k bank guarantee records).
+2. **Processes** each document through a configurable pipeline: OCR engine (tesseract or paddleocr) + extractor (LLM or regex baseline).
+3. **Normalises** both predictions and gold values (digits-only for INNs/IKZ, ISO dates, ISO currency codes, robust float parsing).
+4. **Computes metrics** — field-level exact match, slot-filling P/R/F1, Doc-EM, ANLS edit similarity, digit accuracy, amount MAE, latency percentiles, weighted scores.
+5. **Generates** a Markdown report comparing all system configurations side-by-side.
+
+Processing is **parallel** (multiprocessing for OCR, controlled concurrency for LLM) and **resumable** (checkpointed every batch to parquet).
+
+### Ground-truth dataset
+
+The file `dataset.csv` (external, not in this repo) contains one row per bank guarantee scan with columns: `id`, `bank_inn`, `bank_name`, `pcpl_inn`, `bene_inn`, `issue_date`, `start_date`, `end_date`, `sum`, `currency`, `ikz`, `stored_filename`, `stored_path`.
+
+The document ID can be obtained from the file name (e.g. `.../1962714/1962714_1.pdf` → ID `1962714`).
+
+`bank_inn` is metadata for grouping analysis; it is **not** an evaluated extraction field.
+
+**Evaluated fields:** `pcpl_inn`, `bene_inn`, `issue_date`, `start_date`, `end_date`, `sum`, `currency`, `ikz`.
+
+### Metrics included
+
+| Metric | Description |
+|--------|-------------|
+| **Field accuracy** (micro/macro) | Fraction of exact matches per field after normalisation |
+| **Slot P/R/F1** (micro/macro) | TP if match, FP+FN if wrong, FN if missing |
+| **Doc-EM** | 1 if all required fields match for a document |
+| **Normalised edit similarity** | Levenshtein-based, ANLS-style (string/identifier fields) |
+| **Digit accuracy** | Position-aligned digit match ratio (INN/IKZ) |
+| **Amount MAE** | Mean absolute error on `sum` |
+| **Amount tolerance accuracy** | Fraction within configurable epsilon (default 0.01) |
+| **Latency** | Median, P95, P99 for OCR / extraction / total |
+| **Weighted field accuracy** | User-supplied per-field weights |
+
+### CLI commands
+
+All commands are run via:
 
 ```bash
-uv run python -m app.cli.evaluate \
-  --input-root data/raw/attachments \
-  --gt-root data/ground_truth \
-  --out eval_report.json \
-  --workers 2
+uv run python -m app.cli.validate <command> [options]
 ```
+
+#### 1. `sample` — create a reproducible document subset
+
+```bash
+uv run python -m app.cli.validate sample --n 200 --seed 42
+# Output: data/processed/validation/seeds/seed_n=200_seed=42.csv
+```
+
+Options:
+- `--n <int>` — number of documents to sample (required)
+- `--seed <int>` — random seed (default: 42)
+- `--dataset <path>` — path to dataset.csv (has a sensible default)
+
+The seed file is a CSV containing all GT columns for the sampled rows. Re-running with the same `--n` and `--seed` produces the identical sample.
+
+#### 2. `run` — process documents through OCR + extraction
+
+```bash
+# Tesseract + LLM
+uv run python -m app.cli.validate run \
+  --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
+  --ocr-engine tesseract --extractor llm \
+  --llm-model models/qwen2.5-3b-instruct-q4_k_m.gguf \
+  --workers 4 --batch-size 10
+
+# PaddleOCR + LLM
+uv run python -m app.cli.validate run \
+  --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
+  --ocr-engine paddleocr --extractor llm \
+  --llm-model models/qwen2.5-3b-instruct-q4_k_m.gguf \
+  --workers 2
+
+# Tesseract + regex baseline
+uv run python -m app.cli.validate run \
+  --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
+  --ocr-engine tesseract --extractor regex --workers 4
+
+# PaddleOCR + regex baseline
+uv run python -m app.cli.validate run \
+  --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
+  --ocr-engine paddleocr --extractor regex --workers 2
+```
+
+Options:
+- `--ocr-engine {tesseract,paddleocr}` — OCR backend (required)
+- `--extractor {llm,regex}` — extraction method (required)
+- `--llm-model <path>` — GGUF model file (required for `--extractor llm`)
+- `--workers <int>` — OCR/regex parallelism (default: 2)
+- `--llm-workers <int>` — LLM concurrency; careful with memory (default: 1)
+- `--batch-size <int>` — checkpoint every N docs (default: 10)
+- `--resume / --no-resume` — resume from last checkpoint (default: resume)
+- `--keep-artifacts / --no-keep-artifacts` — retain OCR markdown and extraction JSON per doc (default: false)
+- `--lang <str>` — OCR language code (default: `rus+eng`)
+- `--out-run-id <str>` — override auto-generated run ID
+
+**Resuming:** progress is saved to `data/processed/validation/runs/<run_id>/results.parquet` every `--batch-size` documents. If interrupted, re-run the same command and already-processed documents will be skipped.
+
+**Artifact retention:** with `--no-keep-artifacts` (default), only the minimal results parquet is written — no OCR/extraction files hit disk. With `--keep-artifacts`, per-document OCR markdown and extraction JSON are saved under `runs/<run_id>/artifacts/<doc_id>/`. For large samples this can use significant disk space.
+
+#### 3. `metrics` — compute metrics and generate report
+
+```bash
+# Single run
+uv run python -m app.cli.validate metrics \
+  --run-id <run_id> --out-md report.md
+
+# Compare multiple runs
+uv run python -m app.cli.validate metrics \
+  --run-id "<id1>,<id2>,<id3>,<id4>" --out-md report.md
+
+# With custom field weights
+uv run python -m app.cli.validate metrics \
+  --run-id <run_id> --out-md report.md \
+  --weights weights.json --out-json metrics.json
+```
+
+Options:
+- `--run-id <str>` — comma-separated run IDs (required)
+- `--out-md <path>` — output Markdown report (required)
+- `--out-json <path>` — optional JSON metrics output
+- `--weights <json-or-path>` — field weights for weighted accuracy
+- `--tolerance <float>` — amount equality tolerance (default: 0.01)
+- `--wrong-counts-as-fn / --no-wrong-counts-as-fn` — slot-filling convention (default: yes)
+
+### Field weights format
+
+Create a JSON file (e.g. `weights.json`):
+
+```json
+{
+  "pcpl_inn": 1.0,
+  "bene_inn": 1.0,
+  "issue_date": 0.8,
+  "start_date": 0.5,
+  "end_date": 0.5,
+  "sum": 1.0,
+  "currency": 0.3,
+  "ikz": 0.7
+}
+```
+
+Keys are ground-truth field names. Fields not listed are excluded from the weighted score.
+
+### Output structure
+
+```
+data/processed/validation/
+├── seeds/
+│   └── seed_n=200_seed=42.csv
+└── runs/
+    └── <run_id>/
+        ├── metadata.json       # run config, machine info, timestamps
+        ├── results.parquet     # per-doc predictions, gold, diagnostics, timings
+        └── artifacts/          # (only with --keep-artifacts)
+            └── <doc_id>/
+                ├── ocr.md
+                └── extraction.json
+```
+
+### Normalization rules
+
+Applied to both gold and predicted values before comparison:
+
+- **INN / IKZ**: strip all non-digits; empty → null. Leading zeros preserved.
+- **Dates**: parse to `YYYY-MM-DD`. Accepts `DD.MM.YYYY`, `DD/MM/YYYY`, ISO, and 2-digit year formats.
+- **Currency**: map Russian variants (`руб.`, `рублей`, `₽`, `RUR`) → `RUB`; `долларов` → `USD`; `евро` → `EUR`.
+- **Amount**: strip non-numeric characters, accept comma as decimal separator, round to 2 decimal places for equality, keep raw numeric for MAE.
+
+### Supported file formats
+
+PDF, TIF, TIFF, PNG, JPG/JPEG — multi-page TIFFs are handled page-by-page.
 
 ## Running Tests
 
@@ -268,9 +435,17 @@ app/
 │   └── writer.py            # Artifact serialisation
 ├── workers/
 │   └── tasks.py             # arq worker tasks
+├── validation/
+│   ├── normalize.py         # Field normalisation rules
+│   ├── metrics.py           # Metric computation engine
+│   ├── regex_baseline.py    # Regex-based baseline extractor
+│   ├── runner.py            # Parallel, resumable evaluation runner
+│   ├── report.py            # Markdown report generator
+│   └── storage.py           # Parquet-based result storage
 ├── cli/
 │   ├── ocr.py               # Bulk OCR CLI
-│   └── evaluate.py          # Evaluation scaffold CLI
+│   ├── validate.py          # Validation CLI (sample, run, metrics)
+│   └── evaluate.py          # Evaluation scaffold CLI (legacy)
 ├── schemas/
 │   └── jobs.py              # API request/response models
 streamlit_app.py             # Streamlit frontend

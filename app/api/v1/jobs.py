@@ -52,10 +52,15 @@ async def create_job_upload(
     if file is None:
         raise HTTPException(422, "Provide a file upload")
 
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only PDF files accepted")
+    _ALLOWED_EXT = {".pdf", ".tif", ".tiff", ".png", ".jpg", ".jpeg"}
+    ext = Path(file.filename).suffix.lower() if file.filename else ""
+    if not file.filename or ext not in _ALLOWED_EXT:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            f"Allowed file types: {', '.join(sorted(_ALLOWED_EXT))}",
+        )
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
     contents = await file.read()
     tmp.write(contents)
     tmp.flush()
@@ -95,8 +100,12 @@ async def create_job_by_path(
     db: AsyncSession = Depends(get_db),
 ):
     resolved = validate_file_path(body.file_path)
-    if not str(resolved).lower().endswith(".pdf"):
-        raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only PDF files accepted")
+    _ALLOWED_EXT = {".pdf", ".tif", ".tiff", ".png", ".jpg", ".jpeg"}
+    if resolved.suffix.lower() not in _ALLOWED_EXT:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            f"Allowed file types: {', '.join(sorted(_ALLOWED_EXT))}",
+        )
 
     sha = compute_sha256(resolved)
     job = await create_job(

@@ -12,9 +12,13 @@ from pathlib import Path
 import requests
 import streamlit as st
 
-API_BASE = st.sidebar.text_input("API URL", value="http://localhost:8000")
+st.set_page_config(
+    page_title="Document AI — Bank Guarantees",
+    page_icon=".streamlit/icon.png",
+    layout="wide",
+)
 
-st.set_page_config(page_title="Document AI — Bank Guarantees", layout="wide")
+API_BASE = st.sidebar.text_input("API URL", value="http://localhost:8000")
 st.title("Document AI — Bank Guarantee Extraction")
 
 # ── Sidebar ──────────────────────────────────────────────────
@@ -150,23 +154,48 @@ with tab_upload:
                 )
         st.divider()
 
-    uploaded = st.file_uploader("Choose a PDF", type=["pdf"])
+    _ALLOWED_TYPES = ["pdf", "tif", "tiff", "png", "jpg", "jpeg"]
+    _MIME_MAP = {
+        ".pdf": "application/pdf", ".tif": "image/tiff", ".tiff": "image/tiff",
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    }
+    uploaded = st.file_uploader("Choose a document", type=_ALLOWED_TYPES)
     if uploaded:
         import fitz
-        pdf_bytes = uploaded.getvalue()
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        preview_cols = st.columns(min(len(doc), 4))
-        for i, page in enumerate(doc):
-            if i >= 4:
-                st.caption(f"… and {len(doc) - 4} more page(s)")
-                break
-            pix = page.get_pixmap(dpi=120)
-            preview_cols[i].image(pix.tobytes("png"), caption=f"Page {i + 1}", width="stretch")
-        st.caption(f"**{uploaded.name}** — {len(doc)} page(s), {len(pdf_bytes) / 1024:.0f} KB")
-        doc.close()
+        from PIL import Image as _PILImage
+        file_bytes = uploaded.getvalue()
+        suffix = Path(uploaded.name).suffix.lower()
+
+        if suffix == ".pdf":
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            preview_cols = st.columns(min(len(doc), 4))
+            for i, page in enumerate(doc):
+                if i >= 4:
+                    st.caption(f"… and {len(doc) - 4} more page(s)")
+                    break
+                pix = page.get_pixmap(dpi=120)
+                preview_cols[i].image(pix.tobytes("png"), caption=f"Page {i + 1}", width="stretch")
+            st.caption(f"**{uploaded.name}** — {len(doc)} page(s), {len(file_bytes) / 1024:.0f} KB")
+            doc.close()
+        elif suffix in (".tif", ".tiff"):
+            import io
+            img = _PILImage.open(io.BytesIO(file_bytes))
+            n_frames = getattr(img, "n_frames", 1)
+            preview_cols = st.columns(min(n_frames, 4))
+            for i in range(min(n_frames, 4)):
+                img.seek(i)
+                preview_cols[i].image(img.copy().convert("RGB"), caption=f"Page {i + 1}", width="stretch")
+            if n_frames > 4:
+                st.caption(f"… and {n_frames - 4} more page(s)")
+            st.caption(f"**{uploaded.name}** — {n_frames} page(s), {len(file_bytes) / 1024:.0f} KB")
+        else:
+            st.image(file_bytes, caption=uploaded.name, width="stretch")
+            st.caption(f"**{uploaded.name}** — {len(file_bytes) / 1024:.0f} KB")
 
     if uploaded and st.button("Process uploaded file"):
-        files = {"file": (uploaded.name, uploaded.getvalue(), "application/pdf")}
+        suffix = Path(uploaded.name).suffix.lower()
+        mime = _MIME_MAP.get(suffix, "application/octet-stream")
+        files = {"file": (uploaded.name, uploaded.getvalue(), mime)}
         data = {"pipeline": pipeline, "engine_ocr": engine_ocr, "lang": lang}
         resp = requests.post(f"{API_BASE}/v1/jobs", files=files, data=data)
         if resp.status_code == 201:

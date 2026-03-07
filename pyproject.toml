@@ -20,10 +20,15 @@ dependencies = [
     "llama-cpp-python",
     "python-multipart",
     "numpy",
+    "pandas",
+    "pyarrow",
+    "rapidfuzz",
+    "tqdm",
     "streamlit",
     "watchdog>=6.0.0",
     "paddleocr>=3.4.0",
     "paddlepaddle>=3.3.0",
+    "ipykernel>=7.2.0",
 ]
 
 [project.optional-dependencies]
