@@ -30,19 +30,33 @@ class LLMEngine:
         )
         log.info("LLM model loaded.")
 
-    def generate(self, system: str, user: str) -> str:
+    def generate(
+        self,
+        system: str,
+        user: str,
+        *,
+        json_schema: dict | None = None,
+    ) -> str:
+        """Run chat completion. If *json_schema* is given, enable constrained decoding."""
         if self._model is None:
             raise RuntimeError("LLM model not loaded — call .load() first")
 
-        resp = self._model.create_chat_completion(
-            messages=[
+        kwargs: dict = {
+            "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            max_tokens=settings.LLM_MAX_TOKENS,
-            temperature=settings.LLM_TEMPERATURE,
-            top_p=settings.LLM_TOP_P,
-        )
+            "max_tokens": settings.LLM_MAX_TOKENS,
+            "temperature": settings.LLM_TEMPERATURE,
+            "top_p": settings.LLM_TOP_P,
+        }
+        if json_schema is not None:
+            kwargs["response_format"] = {
+                "type": "json_object",
+                "schema": json_schema,
+            }
+
+        resp = self._model.create_chat_completion(**kwargs)
         return resp["choices"][0]["message"]["content"]  # type: ignore[index]
 
     def unload(self) -> None:

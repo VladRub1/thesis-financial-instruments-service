@@ -3,7 +3,7 @@
 Usage examples:
     uv run python -m app.cli.validate sample --n 200 --seed 42
     uv run python -m app.cli.validate run --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
-        --ocr-engine tesseract --extractor llm --llm-model models/qwen2.5-3b-instruct-q4_k_m.gguf
+        --ocr-engine tesseract --extractor llm --llm-model models/qwen3-4b-instruct-2507-q5_k_m.gguf
     uv run python -m app.cli.validate metrics --run-id <id> --out-md report.md
 """
 from __future__ import annotations

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     TESSERACT_CMD: str = "tesseract"
 
     # LLM
-    LLM_MODEL_PATH: str = "/models/qwen2.5-3b-instruct-q4_k_m.gguf"
+    LLM_MODEL_PATH: str = "models/qwen3-4b-instruct-2507-q5_k_m.gguf"
     LLM_N_CTX: int = 4096
     LLM_MAX_TOKENS: int = 2048
     LLM_TEMPERATURE: float = 0.0

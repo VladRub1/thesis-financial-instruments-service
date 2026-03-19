@@ -11,7 +11,7 @@ from app.core.logging import get_logger
 from app.llm.engine import LLMEngine
 from app.llm.postprocess import postprocess
 from app.llm.prompts import SYSTEM_PROMPT, build_llm_input, build_retry_prompt, build_user_prompt
-from app.llm.schemas import ExtractionResult, ExtractionV1
+from app.llm.schemas import ExtractionResult, ExtractionV1, extraction_json_schema
 
 log = get_logger(__name__)
 
@@ -64,6 +64,7 @@ def extract_fields(
 
     llm_input = build_llm_input(ocr_md, layout_json)
     user_prompt = build_user_prompt(llm_input)
+    schema = extraction_json_schema()
 
     max_retries = settings.LLM_MAX_RETRIES
     all_errors: list[str] = []
@@ -72,10 +73,14 @@ def extract_fields(
     for attempt in range(1 + max_retries):
         try:
             if attempt == 0:
-                raw_output = engine.generate(SYSTEM_PROMPT, user_prompt)
+                raw_output = engine.generate(
+                    SYSTEM_PROMPT, user_prompt, json_schema=schema,
+                )
             else:
                 retry_prompt = build_retry_prompt(llm_input, all_errors)
-                raw_output = engine.generate(SYSTEM_PROMPT, retry_prompt)
+                raw_output = engine.generate(
+                    SYSTEM_PROMPT, retry_prompt, json_schema=schema,
+                )
         except Exception as exc:
             log.exception("LLM inference error on attempt %d", attempt + 1)
             return ExtractionResult(

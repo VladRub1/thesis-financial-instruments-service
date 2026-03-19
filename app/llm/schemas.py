@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ExtractionV1(BaseModel):
+    model_config = {"extra": "forbid"}
+
     guarantee_number: str | None = None
     issue_date: date | None = None
     start_date: date | None = None
@@ -82,3 +84,12 @@ class ExtractionResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
     confidence: float | None = None
     warnings: list[str] = Field(default_factory=list)
+
+
+def extraction_json_schema() -> dict:
+    """Return a JSON Schema compatible with llama-cpp-python constrained decoding.
+
+    Pydantic emits ``date`` fields with ``{"type": "string", "format": "date"}``.
+    llama.cpp grammar understands ``"format": "date"`` natively, so no patching needed.
+    """
+    return ExtractionV1.model_json_schema()

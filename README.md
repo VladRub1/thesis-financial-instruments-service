@@ -27,7 +27,7 @@ Runs **OCR** (Tesseract / PaddleOCR) and **LLM extraction** (llama-cpp-python wi
 - Python 3.12+, [uv](https://docs.astral.sh/uv/)
 - Tesseract OCR with Russian language pack (`brew install tesseract tesseract-lang` on macOS)
 - PostgreSQL 14+ and Redis 7+ (or use Docker Compose)
-- A GGUF model file (e.g. `Qwen2.5-3B-Instruct-Q4_K_M.gguf`)
+- A GGUF model file — see **Model download** below
 
 ### 1. Install dependencies
 
@@ -35,7 +35,55 @@ Runs **OCR** (Tesseract / PaddleOCR) and **LLM extraction** (llama-cpp-python wi
 uv sync
 # For development tools (pytest, ruff, etc.):
 uv sync --extra dev
+# Add `--extra paddle` if PaddleOCR is needed locally
 ```
+
+#### llama-cpp-python install notes
+
+**macOS (Apple Silicon / Metal acceleration):**
+
+```bash
+CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python
+```
+
+The `uv sync` step installs the default wheel which already enables Metal on Apple Silicon.
+If you experience issues, reinstall with the flag above.
+
+**Linux VM (CPU only):**
+
+```bash
+CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python
+```
+
+Or simply `uv sync` — the default build uses CPU. Install `gcc`, `g++`, `cmake`, `make` if building from source (already handled in Docker).
+
+### Model download
+
+Download the default GGUF model into `./models/`:
+
+```bash
+uv run python -m app.cli.download_model
+```
+
+This downloads **Qwen3-4B-Instruct-2507-Q5_K_M.gguf** (~2.9 GB) from [unsloth/Qwen3-4B-Instruct-2507-GGUF](https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF) and saves it as `models/qwen3-4b-instruct-2507-q5_k_m.gguf` (lowercase).
+
+For faster downloads, authenticate with Hugging Face (one of):
+
+```bash
+huggingface-cli login          # interactive, cached for future runs
+export HF_TOKEN=hf_...         # or pass --token hf_...
+```
+
+To download a different quant or verify integrity:
+
+```bash
+uv run python -m app.cli.download_model \
+  --file Qwen3-4B-Instruct-2507-Q4_K_M.gguf \
+  --local-name qwen3-4b-instruct-2507-q4_k_m.gguf \
+  --sha256 <expected-hash>
+```
+
+If you already have a model file, place it in `./models/` and set `LLM_MODEL_PATH` in `.env`.
 
 ### 2. Configure environment
 
@@ -86,7 +134,7 @@ Run the entire application with a single command — no local Python, Tesseract,
 ### Prerequisites
 
 1. Docker and Docker Compose installed
-2. A GGUF model file placed in `./models/` (e.g. `models/qwen2.5-3b-instruct-q4_k_m.gguf`)
+2. A GGUF model file placed in `./models/` (run `uv run python -m app.cli.download_model` or place manually)
 3. A `.env` file (`cp .env.example .env` — defaults work out of the box for Docker)
 
 ### Start
@@ -305,14 +353,14 @@ The seed file is a CSV containing all GT columns for the sampled rows. Re-runnin
 uv run python -m app.cli.validate run \
   --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
   --ocr-engine tesseract --extractor llm \
-  --llm-model models/qwen2.5-3b-instruct-q4_k_m.gguf \
+  --llm-model models/qwen3-4b-instruct-2507-q5_k_m.gguf \
   --workers 4 --batch-size 10
 
 # PaddleOCR + LLM
 uv run python -m app.cli.validate run \
   --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
   --ocr-engine paddleocr --extractor llm \
-  --llm-model models/qwen2.5-3b-instruct-q4_k_m.gguf \
+  --llm-model models/qwen3-4b-instruct-2507-q5_k_m.gguf \
   --workers 2
 
 # Tesseract + regex baseline
@@ -430,7 +478,7 @@ Tests use an in-memory SQLite database and mock the Redis queue + LLM engine —
 | `DATABASE_URL`        | `postgresql+asyncpg://…`       | Async Postgres connection string         |
 | `REDIS_URL`           | `redis://localhost:6379/0`     | Redis for arq job queue                  |
 | `ADMIN_API_KEY`       | (empty)                        | API key for admin endpoints              |
-| `LLM_MODEL_PATH`     | `/models/qwen2.5-…`           | Path to GGUF model file                  |
+| `LLM_MODEL_PATH`     | `models/qwen3-4b-…q5_k_m.gguf`| Path to GGUF model file                  |
 | `LLM_N_CTX`          | `4096`                         | LLM context window                       |
 | `LLM_MAX_TOKENS`     | `2048`                         | Max tokens for LLM response              |
 | `LLM_TEMPERATURE`    | `0.0`                          | LLM temperature (0 = deterministic)      |
@@ -488,7 +536,8 @@ app/
 ├── cli/
 │   ├── ocr.py               # Bulk OCR CLI
 │   ├── validate.py          # Validation CLI (sample, run, metrics)
-│   └── evaluate.py          # Evaluation scaffold CLI (legacy)
+│   ├── evaluate.py          # Evaluation scaffold CLI (legacy)
+│   └── download_model.py    # GGUF model downloader (HuggingFace)
 ├── schemas/
 │   └── jobs.py              # API request/response models
 streamlit_app.py             # Streamlit frontend
