@@ -1,7 +1,7 @@
 """Job endpoints — create, poll, result, corrections."""
 from __future__ import annotations
 
-import tempfile
+import hashlib
 import uuid
 from pathlib import Path
 
@@ -52,6 +52,8 @@ async def create_job_upload(
     if file is None:
         raise HTTPException(422, "Provide a file upload")
 
+    from app.core.config import settings
+
     _ALLOWED_EXT = {".pdf", ".tif", ".tiff", ".png", ".jpg", ".jpeg"}
     ext = Path(file.filename).suffix.lower() if file.filename else ""
     if not file.filename or ext not in _ALLOWED_EXT:
@@ -60,20 +62,18 @@ async def create_job_upload(
             f"Allowed file types: {', '.join(sorted(_ALLOWED_EXT))}",
         )
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
     contents = await file.read()
-    tmp.write(contents)
-    tmp.flush()
-    tmp.close()
-
-    import hashlib
     sha = hashlib.sha256(contents).hexdigest()
+
+    upload_dir = settings.upload_path
+    dest = upload_dir / f"{sha[:16]}_{file.filename}"
+    dest.write_bytes(contents)
 
     job = await create_job(
         db,
         input_type="upload",
         original_filename=file.filename,
-        source_path=tmp.name,
+        source_path=str(dest),
         sha256=sha,
         pipeline=pipeline,
         engine_ocr=engine_ocr,

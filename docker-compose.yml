@@ -1,3 +1,20 @@
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  env_file: .env
+  environment: &app-env
+    DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/docai
+    REDIS_URL: redis://redis:6379/0
+    UPLOAD_DIR: /app/data/uploads
+    PROCESSED_DIR: /app/data/processed
+    LLM_MODEL_PATH: /app/models/qwen2.5-3b-instruct-q4_k_m.gguf
+    ALLOWED_INPUT_ROOTS: /app/data
+  volumes: &app-volumes
+    - app-data:/app/data
+    - ./models:/app/models:ro
+  restart: unless-stopped
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -13,6 +30,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -22,21 +40,13 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 5
+    restart: unless-stopped
 
   api:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+    <<: *app-common
+    command: ["api"]
     ports:
       - "8000:8000"
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/docai
-      REDIS_URL: redis://redis:6379/0
-    volumes:
-      - ./data/processed:/app/data/processed
-      - models:/models
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,17 +54,11 @@ services:
         condition: service_healthy
 
   worker:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    command: uv run arq app.workers.tasks.WorkerSettings
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/docai
-      REDIS_URL: redis://redis:6379/0
+    <<: *app-common
+    command: ["worker"]
     volumes:
-      - ./data/processed:/app/data/processed
-      - models:/models
+      - app-data:/app/data
+      - ./models:/app/models:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,15 +66,16 @@ services:
         condition: service_healthy
 
   streamlit:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    command: uv run streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+    <<: *app-common
+    command: ["streamlit"]
     ports:
       - "8501:8501"
+    environment:
+      <<: *app-env
+      API_BASE_URL: http://api:8000
     depends_on:
       - api
 
 volumes:
   pgdata:
-  models:
+  app-data:

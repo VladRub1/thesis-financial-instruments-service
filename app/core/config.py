@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     # Storage
     PROCESSED_DIR: str = "data/processed"
+    UPLOAD_DIR: str = "data/uploads"
     COPY_SOURCE_PDF: bool = False
 
     # Security — semicolon-separated absolute paths
@@ -46,6 +47,12 @@ class Settings(BaseSettings):
     @property
     def processed_path(self) -> Path:
         return Path(self.PROCESSED_DIR)
+
+    @property
+    def upload_path(self) -> Path:
+        p = Path(self.UPLOAD_DIR)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
 
     @property
     def allowed_roots(self) -> list[Path]:

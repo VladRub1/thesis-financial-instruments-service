@@ -9,6 +9,8 @@ import json
 import time
 from pathlib import Path
 
+import os
+
 import requests
 import streamlit as st
 
@@ -18,7 +20,8 @@ st.set_page_config(
     layout="wide",
 )
 
-API_BASE = st.sidebar.text_input("API URL", value="http://localhost:8000")
+_DEFAULT_API = os.environ.get("API_BASE_URL", "http://localhost:8000")
+API_BASE = st.sidebar.text_input("API URL", value=_DEFAULT_API)
 st.title("Document AI — Bank Guarantee Extraction")
 
 # ── Sidebar ──────────────────────────────────────────────────

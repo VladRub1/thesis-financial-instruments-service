@@ -81,19 +81,61 @@ Open http://localhost:8501 in your browser.
 
 ## Docker Compose (full stack)
 
+Run the entire application with a single command — no local Python, Tesseract, or Postgres install needed.
+
+### Prerequisites
+
+1. Docker and Docker Compose installed
+2. A GGUF model file placed in `./models/` (e.g. `models/qwen2.5-3b-instruct-q4_k_m.gguf`)
+3. A `.env` file (`cp .env.example .env` — defaults work out of the box for Docker)
+
+### Start
+
 ```bash
-# Place your GGUF model in ./models/ directory
 docker compose up --build
 ```
 
-Services:
-| Service   | Port | Description              |
-|-----------|------|--------------------------|
-| api       | 8000 | FastAPI backend          |
-| worker    | —    | arq background worker    |
-| streamlit | 8501 | Streamlit frontend       |
-| postgres  | 5432 | PostgreSQL database      |
-| redis     | 6379 | Redis job queue          |
+This will:
+- Build the application image (installs Python, Tesseract, all dependencies)
+- Start PostgreSQL and Redis
+- Run database migrations automatically (Alembic)
+- Start the API server, background worker, and Streamlit UI
+
+### Access
+
+| Service   | URL / Port | Description |
+|-----------|------------|-------------|
+| Streamlit | http://localhost:8501 | Web UI for document upload and results |
+| API docs  | http://localhost:8000/docs | Swagger / OpenAPI interface |
+| API       | http://localhost:8000 | REST API |
+| PostgreSQL | localhost:5432 | Database (user: postgres, pass: postgres, db: docai) |
+| Redis     | localhost:6379 | Job queue |
+
+### Shared storage
+
+All containers share a Docker volume (`app-data`) for:
+- **Uploads** (`/app/data/uploads`) — files uploaded via the API; accessible by the worker for processing
+- **Processed** (`/app/data/processed`) — OCR and extraction artifacts; accessible by Streamlit for display
+
+The model directory (`./models/`) is bind-mounted read-only into all app containers.
+
+### Stop / reset
+
+```bash
+# Stop all services (data persists)
+docker compose down
+
+# Stop and delete all data (clean slate)
+docker compose down -v
+```
+
+### Migrating to a remote server
+
+1. Copy the project to the server
+2. Place the GGUF model in `./models/`
+3. Copy or create `.env` (defaults work; change `ADMIN_API_KEY` for security)
+4. Run `docker compose up --build -d`
+5. Open `http://<server-ip>:8501` for the UI, `http://<server-ip>:8000/docs` for the API
 
 ## Using the Streamlit UI
 
@@ -397,6 +439,7 @@ Tests use an in-memory SQLite database and mock the Redis queue + LLM engine —
 | `DEFAULT_OCR_ENGINE`  | `tesseract`                   | Default OCR engine                       |
 | `TESSERACT_CMD`       | `tesseract`                   | Path to tesseract binary                 |
 | `PROCESSED_DIR`       | `data/processed`              | Root for output artifacts                |
+| `UPLOAD_DIR`          | `data/uploads`                | Directory for uploaded files             |
 | `COPY_SOURCE_PDF`     | `false`                       | Copy source PDF into output directory    |
 | `ALLOWED_INPUT_ROOTS` | (empty)                        | Semicolon-separated allowed path roots   |
 | `WORKER_MAX_JOBS`     | `2`                            | Max concurrent jobs per worker           |
