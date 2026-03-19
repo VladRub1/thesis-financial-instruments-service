@@ -63,3 +63,6 @@ eval_report.json
 
 # Todo file
 todo.md
+
+# Thesis context (local reference, not source code)
+context.md
