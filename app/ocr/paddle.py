@@ -8,10 +8,12 @@ import os
 from pathlib import Path
 
 os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
+os.environ.setdefault("DISABLE_MODEL_SOURCE_CHECK", "True")
 
 from PIL import Image
 
 from app.core.config import settings
+from app.core.logging import setup_logging
 from app.ocr.base import (
     BlockResult,
     LineResult,
@@ -58,6 +60,8 @@ class PaddleEngine(OCREngine):
             enable_mkldnn=False,
             cpu_threads=8,
         )
+        # Paddle may reconfigure root logging; restore project logging format/level.
+        setup_logging(settings.DEBUG)
 
     def name(self) -> str:
         return "paddleocr"
