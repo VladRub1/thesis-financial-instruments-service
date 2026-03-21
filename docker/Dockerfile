@@ -1,4 +1,5 @@
 FROM python:3.12-slim
+ARG ENABLE_PADDLE=false
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
@@ -14,7 +15,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 
 COPY pyproject.toml uv.lock* README.md ./
-RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
+RUN if [ "$ENABLE_PADDLE" = "true" ]; then \
+      uv sync --frozen --no-dev --extra paddle 2>/dev/null || uv sync --no-dev --extra paddle; \
+    else \
+      uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev; \
+    fi
 
 COPY . .
 

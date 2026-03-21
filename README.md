@@ -137,6 +137,7 @@ Run the entire application with a single command — no local Python, Tesseract,
 1. Docker and Docker Compose installed
 2. A GGUF model file placed in `./models/` (run `uv run python -m app.cli.download_model` or place manually)
 3. A `.env` file (`cp .env.example .env` — defaults work out of the box for Docker)
+4. Optional: set `DOCKER_ENABLE_PADDLE=true` in `.env` to include PaddleOCR in the image build
 
 ### Start
 
@@ -149,6 +150,23 @@ This will:
 - Start PostgreSQL and Redis
 - Run database migrations automatically (Alembic)
 - Start the API server, background worker, and Streamlit UI
+
+### PaddleOCR in Docker (optional)
+
+PaddleOCR is controlled by a compose build flag, so you can enable/disable it without editing `docker/Dockerfile`:
+
+```bash
+# .env
+DOCKER_ENABLE_PADDLE=true
+
+# rebuild image with Paddle dependencies
+docker compose up --build -d
+```
+
+Notes:
+- `DOCKER_ENABLE_PADDLE=false` (default) keeps the image smaller and avoids platform issues.
+- Paddle wheels are typically available on Linux `x86_64`.
+- On Linux `aarch64` (common on Apple Silicon Docker hosts), Paddle builds may fail due to missing wheels.
 
 ### Access
 
@@ -184,7 +202,7 @@ docker compose down -v
 
 1. Copy the project to the server
 2. Place the GGUF model in `./models/`
-3. Copy or create `.env` (defaults work; set `ADMIN_API_KEY` and `DEMO_PASSWORD` for public demo)
+3. Copy or create `.env` (defaults work; set `ADMIN_API_KEY` and `DEMO_PASSWORD` for public demo; set `DOCKER_ENABLE_PADDLE=true` only if you need PaddleOCR and host is compatible)
 4. Run `docker compose up --build -d`
 5. Expose Streamlit (e.g. via Caddy) at `https://thesis-guarantee.ru/`; keep API internal
 
@@ -202,7 +220,7 @@ Open http://localhost:8501 after starting all services. The sidebar lets you con
 ### Sidebar settings
 
 - **Pipeline** — `ocr+extract` runs OCR followed by LLM field extraction; `ocr_only` runs OCR and skips the LLM step (useful for inspecting raw OCR quality).
-- **OCR engine** — `tesseract` (default, lightweight) or `paddleocr` (alternative engine, requires extra dependencies).
+- **OCR engine** — `tesseract` (default, lightweight) or `paddleocr` (requires Docker build with `DOCKER_ENABLE_PADDLE=true` or local install with `uv sync --extra paddle`).
 - **Language** — Tesseract language codes to use during recognition. `rus+eng` applies both Russian and English models simultaneously, which is important for bank guarantees that mix Cyrillic body text with Latin abbreviations, BIC codes, and legal references. Other common values: `rus` (Russian only), `eng` (English only). You can use any language code installed via `tesseract-lang`.
 
 ### Workflow
@@ -507,6 +525,7 @@ Tests use an in-memory SQLite database and mock the Redis queue + LLM engine —
 | `COPY_SOURCE_PDF`     | `false`                       | Copy source PDF into output directory    |
 | `ALLOWED_INPUT_ROOTS` | (empty)                        | Semicolon-separated allowed path roots   |
 | `WORKER_MAX_JOBS`     | `1` (demo) / `2` (dev)         | Max concurrent jobs per worker; use 1 for stable public demo |
+| `DOCKER_ENABLE_PADDLE`| `false`                        | Docker Compose build flag: include PaddleOCR deps in image |
 
 ## Project Structure
 
@@ -568,7 +587,7 @@ tests/
 ├── test_extraction.py       # LLM extraction + validation tests
 └── test_corrections.py      # Correction submission tests
 alembic/                     # Database migrations
-docker/Dockerfile
+docker/Dockerfile            # App image with optional Paddle deps via ENABLE_PADDLE build arg
 docker-compose.yml
 ```
 
