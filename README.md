@@ -167,8 +167,7 @@ Notes:
 - `DOCKER_ENABLE_PADDLE=false` (default) keeps the image smaller and avoids platform issues.
 - Paddle wheels are typically available on Linux `x86_64`.
 - On Linux `aarch64` (common on Apple Silicon Docker hosts), Paddle builds may fail due to missing wheels.
-- For server stability, this project pins `paddlepaddle==3.2.0` and `paddleocr==3.3.3`.
-- Paddle runs CPU-only in the worker (`enable_mkldnn=False`, `cpu_threads=8`) to avoid OneDNN runtime crashes (`ConvertPirAttribute2RuntimeAttribute`).
+- For server stability, this project pins `paddlepaddle==3.2.0` and `paddleocr==3.3.3` to avoid OneDNN runtime crashes (`ConvertPirAttribute2RuntimeAttribute`).
 - Paddle model cache is persisted at `PADDLE_PDX_CACHE_HOME` (compose default: `/app/data/paddle-cache`) so models are not re-downloaded on each container restart.
 
 ### Access
