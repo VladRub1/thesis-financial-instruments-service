@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "thesis-financial-instruments-service"
     DEBUG: bool = False
     ADMIN_API_KEY: str = ""
+    DEMO_PASSWORD: str = ""
 
     # Postgres (async)
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/docai"

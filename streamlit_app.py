@@ -5,7 +5,6 @@ Run with:
 """
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 
@@ -14,6 +13,9 @@ import os
 import requests
 import streamlit as st
 
+from app.core.config import settings
+from app.ui.login_gate import render_login_gate
+
 st.set_page_config(
     page_title="Document AI — Bank Guarantees",
     page_icon=".streamlit/icon.png",
@@ -21,8 +23,19 @@ st.set_page_config(
 )
 
 _DEFAULT_API = os.environ.get("API_BASE_URL", "http://localhost:8000")
-API_BASE = st.sidebar.text_input("API URL", value=_DEFAULT_API)
+API_BASE = _DEFAULT_API
+DEMO_PASSWORD = settings.DEMO_PASSWORD.strip()
+MAX_UPLOAD_MB = 10
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
+if "demo_authenticated" not in st.session_state:
+    st.session_state["demo_authenticated"] = False
+if DEMO_PASSWORD and not st.session_state["demo_authenticated"]:
+    render_login_gate(DEMO_PASSWORD)
+    st.stop()
+
 st.title("Document AI — Bank Guarantee Extraction")
+st.info("Public demo note: processing usually takes 2–3 minutes. If the worker is busy, jobs may wait in queue.")
 
 # ── Sidebar ──────────────────────────────────────────────────
 st.sidebar.header("Settings")
@@ -52,6 +65,11 @@ def poll_job(job_id: str) -> dict:
             progress_bar.progress(1.0, text="Failed")
             return data
 
+        if job_status == "queued":
+            progress_bar.progress(0.01, text="Queued… worker is busy, waiting to start")
+            time.sleep(1)
+            continue
+
         if pages_total and pages_total > 0:
             progress_bar.progress(
                 min(pages_done / pages_total, 0.99),
@@ -65,7 +83,15 @@ def poll_job(job_id: str) -> dict:
 def submit_job(job_id: str) -> None:
     """Store job_id in session state and show results."""
     st.session_state["last_job_id"] = job_id
-    result = poll_job(job_id)
+    st.session_state["active_job_id"] = job_id
+    try:
+        result = poll_job(job_id)
+    except Exception as exc:
+        st.error(f"Job polling failed: {exc}")
+        return
+    finally:
+        if st.session_state.get("active_job_id") == job_id:
+            st.session_state["active_job_id"] = None
     if result["status"] == "succeeded":
         st.success("Processing complete!")
     else:
@@ -141,6 +167,16 @@ def show_correction_form(job_id: str) -> None:
 
 
 # ── Upload tab ───────────────────────────────────────────────
+if "active_job_id" not in st.session_state:
+    st.session_state["active_job_id"] = None
+
+session_busy = bool(st.session_state.get("active_job_id"))
+if session_busy:
+    st.warning(
+        f"A job is currently running in this session (`{st.session_state['active_job_id']}`). "
+        "Wait until it finishes before submitting another."
+    )
+
 with tab_upload:
     SAMPLES_DIR = Path(__file__).parent / "samples"
     sample_pdfs = sorted(SAMPLES_DIR.glob("*.pdf")) if SAMPLES_DIR.is_dir() else []
@@ -163,10 +199,20 @@ with tab_upload:
         ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
     }
     uploaded = st.file_uploader("Choose a document", type=_ALLOWED_TYPES)
+    file_bytes = b""
     if uploaded:
         import fitz
         from PIL import Image as _PILImage
         file_bytes = uploaded.getvalue()
+        if len(file_bytes) > MAX_UPLOAD_BYTES:
+            st.error(
+                f"File is too large ({len(file_bytes) / (1024 * 1024):.1f} MB). "
+                f"Public demo limit is {MAX_UPLOAD_MB} MB."
+            )
+            uploaded = None
+            file_bytes = b""
+
+    if uploaded:
         suffix = Path(uploaded.name).suffix.lower()
 
         if suffix == ".pdf":
@@ -195,7 +241,7 @@ with tab_upload:
             st.image(file_bytes, caption=uploaded.name, width="stretch")
             st.caption(f"**{uploaded.name}** — {len(file_bytes) / 1024:.0f} KB")
 
-    if uploaded and st.button("Process uploaded file"):
+    if uploaded and st.button("Process uploaded file", disabled=session_busy):
         suffix = Path(uploaded.name).suffix.lower()
         mime = _MIME_MAP.get(suffix, "application/octet-stream")
         files = {"file": (uploaded.name, uploaded.getvalue(), mime)}
@@ -211,7 +257,7 @@ with tab_upload:
 # ── Path tab ─────────────────────────────────────────────────
 with tab_path:
     file_path = st.text_input("Server-side file path")
-    if file_path and st.button("Process by path"):
+    if file_path and st.button("Process by path", disabled=session_busy):
         body = {
             "file_path": file_path,
             "pipeline": pipeline,

@@ -61,8 +61,10 @@ eval_report.json
 # Project — temp uploads
 /tmp_uploads/
 
+# Secrets
 # Todo file
 todo.md
-
 # Thesis context (local reference, not source code)
 context.md
+# Admin cheatsheet
+ADMIN_CHEATSHEET.md

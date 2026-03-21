@@ -90,6 +90,7 @@ If you already have a model file, place it in `./models/` and set `LLM_MODEL_PAT
 ```bash
 cp .env.example .env
 # Edit .env — set DATABASE_URL, REDIS_URL, LLM_MODEL_PATH, ALLOWED_INPUT_ROOTS
+# For public demo: set DEMO_PASSWORD to gate the Streamlit UI
 ```
 
 ### 3. Start infrastructure
@@ -159,6 +160,8 @@ This will:
 | PostgreSQL | localhost:5432 | Database (user: postgres, pass: postgres, db: docai) |
 | Redis     | localhost:6379 | Job queue |
 
+For public deployment behind Caddy/reverse proxy, keep FastAPI internal and expose only Streamlit.
+
 ### Shared storage
 
 All containers share a Docker volume (`app-data`) for:
@@ -181,22 +184,34 @@ docker compose down -v
 
 1. Copy the project to the server
 2. Place the GGUF model in `./models/`
-3. Copy or create `.env` (defaults work; change `ADMIN_API_KEY` for security)
+3. Copy or create `.env` (defaults work; set `ADMIN_API_KEY` and `DEMO_PASSWORD` for public demo)
 4. Run `docker compose up --build -d`
-5. Open `http://<server-ip>:8501` for the UI, `http://<server-ip>:8000/docs` for the API
+5. Expose Streamlit (e.g. via Caddy) at `https://thesis-guarantee.ru/`; keep API internal
 
 ## Using the Streamlit UI
 
 Open http://localhost:8501 after starting all services. The sidebar lets you configure processing options before submitting a document.
 
+### Public demo login gate
+
+- Set `DEMO_PASSWORD` in `.env`.
+- Until the correct password is entered, users only see a macOS-style login window with a random ASCII art and haiku.
+- Auth state is stored in Streamlit session state for the current browser session.
+- Login UI lives in `app/ui/login_gate.py` and `app/ui/demo_content.py`.
+
 ### Sidebar settings
 
-- **API URL** — address of the FastAPI backend (default `http://localhost:8000`; change if running remotely).
 - **Pipeline** — `ocr+extract` runs OCR followed by LLM field extraction; `ocr_only` runs OCR and skips the LLM step (useful for inspecting raw OCR quality).
 - **OCR engine** — `tesseract` (default, lightweight) or `paddleocr` (alternative engine, requires extra dependencies).
 - **Language** — Tesseract language codes to use during recognition. `rus+eng` applies both Russian and English models simultaneously, which is important for bank guarantees that mix Cyrillic body text with Latin abbreviations, BIC codes, and legal references. Other common values: `rus` (Russian only), `eng` (English only). You can use any language code installed via `tesseract-lang`.
 
 ### Workflow
+
+Public demo protections:
+- Processing typically takes **2–3 minutes** per document.
+- If the worker is busy, jobs may remain in `queued` state before processing starts.
+- Streamlit limits uploads to **10 MB** (`.streamlit/config.toml`).
+- New submissions are disabled while one job is actively tracked in the same browser session.
 
 1. **Upload a PDF** — go to the "Upload PDF" tab, select a scanned bank guarantee PDF, and click "Process uploaded file". A progress bar shows page-by-page OCR progress.
 2. **Or submit by server path** — go to the "By file path" tab, enter the absolute path to a PDF on the server (must be under an allowed root), and click "Process by path".
@@ -478,6 +493,7 @@ Tests use an in-memory SQLite database and mock the Redis queue + LLM engine —
 | `DATABASE_URL`        | `postgresql+asyncpg://…`       | Async Postgres connection string         |
 | `REDIS_URL`           | `redis://localhost:6379/0`     | Redis for arq job queue                  |
 | `ADMIN_API_KEY`       | (empty)                        | API key for admin endpoints              |
+| `DEMO_PASSWORD`       | (empty)                        | Streamlit public demo login password     |
 | `LLM_MODEL_PATH`     | `models/qwen3-4b-…q5_k_m.gguf`| Path to GGUF model file                  |
 | `LLM_N_CTX`          | `4096`                         | LLM context window                       |
 | `LLM_MAX_TOKENS`     | `2048`                         | Max tokens for LLM response              |
@@ -490,7 +506,7 @@ Tests use an in-memory SQLite database and mock the Redis queue + LLM engine —
 | `UPLOAD_DIR`          | `data/uploads`                | Directory for uploaded files             |
 | `COPY_SOURCE_PDF`     | `false`                       | Copy source PDF into output directory    |
 | `ALLOWED_INPUT_ROOTS` | (empty)                        | Semicolon-separated allowed path roots   |
-| `WORKER_MAX_JOBS`     | `2`                            | Max concurrent jobs per worker           |
+| `WORKER_MAX_JOBS`     | `1` (demo) / `2` (dev)         | Max concurrent jobs per worker; use 1 for stable public demo |
 
 ## Project Structure
 
@@ -505,6 +521,7 @@ app/
 │   ├── logging.py           # Logging setup
 │   └── security.py          # API key + file path validation
 ├── db/
+│   ├── base.py              # SQLAlchemy DeclarativeBase
 │   ├── models.py            # SQLAlchemy ORM models
 │   └── session.py           # Async session factory
 ├── ocr/
@@ -540,7 +557,11 @@ app/
 │   └── download_model.py    # GGUF model downloader (HuggingFace)
 ├── schemas/
 │   └── jobs.py              # API request/response models
-streamlit_app.py             # Streamlit frontend
+├── ui/
+│   ├── demo_content.py      # ASCII art + haiku pools for login gate
+│   └── login_gate.py        # Streamlit password gate (macOS-style window)
+streamlit_app.py             # Streamlit frontend (imports app.ui.login_gate)
+.streamlit/config.toml       # Streamlit config (maxUploadSize=10)
 tests/
 ├── conftest.py              # Fixtures (in-memory DB, mocked queue)
 ├── test_api_jobs.py         # API endpoint tests
