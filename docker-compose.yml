@@ -23,7 +23,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: docai
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -34,8 +34,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -46,7 +44,7 @@ services:
     <<: *app-common
     command: ["api"]
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,7 +67,7 @@ services:
     <<: *app-common
     command: ["streamlit"]
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     environment:
       <<: *app-env
       API_BASE_URL: http://api:8000
