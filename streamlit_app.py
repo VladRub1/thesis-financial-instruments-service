@@ -25,6 +25,7 @@ st.set_page_config(
 _DEFAULT_API = os.environ.get("API_BASE_URL", "http://localhost:8000")
 API_BASE = _DEFAULT_API
 DEMO_PASSWORD = settings.DEMO_PASSWORD.strip()
+PUBLIC_DEMO_UI = bool(DEMO_PASSWORD)
 MAX_UPLOAD_MB = 10
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
@@ -42,9 +43,18 @@ st.sidebar.header("Settings")
 pipeline = st.sidebar.selectbox("Pipeline", ["ocr+extract", "ocr_only"])
 engine_ocr = st.sidebar.selectbox("OCR engine", ["tesseract", "paddleocr"])
 lang = st.sidebar.selectbox("Language", ["rus+eng", "rus", "eng"])
+if DEMO_PASSWORD and st.sidebar.button("Lock demo"):
+    for key in ("demo_authenticated", "demo_password_input", "demo_auth_error", "demo_ascii", "demo_haiku"):
+        st.session_state.pop(key, None)
+    st.session_state["demo_authenticated"] = False
+    st.rerun()
 
 # ── Upload tab / Path tab ────────────────────────────────────
-tab_upload, tab_path, tab_results = st.tabs(["Upload PDF", "By file path", "Job results"])
+if PUBLIC_DEMO_UI:
+    tab_upload, tab_results = st.tabs(["Upload PDF", "Job results"])
+    tab_path = None
+else:
+    tab_upload, tab_path, tab_results = st.tabs(["Upload PDF", "By file path", "Job results"])
 
 # ── helpers ──────────────────────────────────────────────────
 
@@ -255,22 +265,23 @@ with tab_upload:
             st.error(f"API error: {resp.text}")
 
 # ── Path tab ─────────────────────────────────────────────────
-with tab_path:
-    file_path = st.text_input("Server-side file path")
-    if file_path and st.button("Process by path", disabled=session_busy):
-        body = {
-            "file_path": file_path,
-            "pipeline": pipeline,
-            "engine_ocr": engine_ocr,
-            "lang": lang,
-        }
-        resp = requests.post(f"{API_BASE}/v1/jobs/by-path", json=body)
-        if resp.status_code == 201:
-            job = resp.json()
-            st.info(f"Job created: `{job['job_id']}`")
-            submit_job(job["job_id"])
-        else:
-            st.error(f"API error: {resp.text}")
+if tab_path is not None:
+    with tab_path:
+        file_path = st.text_input("Server-side file path")
+        if file_path and st.button("Process by path", disabled=session_busy):
+            body = {
+                "file_path": file_path,
+                "pipeline": pipeline,
+                "engine_ocr": engine_ocr,
+                "lang": lang,
+            }
+            resp = requests.post(f"{API_BASE}/v1/jobs/by-path", json=body)
+            if resp.status_code == 201:
+                job = resp.json()
+                st.info(f"Job created: `{job['job_id']}`")
+                submit_job(job["job_id"])
+            else:
+                st.error(f"API error: {resp.text}")
 
 # ── Results tab ──────────────────────────────────────────────
 with tab_results:
