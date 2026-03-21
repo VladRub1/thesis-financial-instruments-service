@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # OCR
     DEFAULT_OCR_ENGINE: str = "tesseract"
     TESSERACT_CMD: str = "tesseract"
+    PADDLE_PDX_CACHE_HOME: str = "data/paddle-cache"
 
     # LLM
     LLM_MODEL_PATH: str = "models/qwen3-4b-instruct-2507-q5_k_m.gguf"

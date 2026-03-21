@@ -10,6 +10,7 @@ x-app-common: &app-common
     REDIS_URL: redis://redis:6379/0
     UPLOAD_DIR: /app/data/uploads
     PROCESSED_DIR: /app/data/processed
+    PADDLE_PDX_CACHE_HOME: /app/data/paddle-cache
     LLM_MODEL_PATH: /app/models/qwen3-4b-instruct-2507-q5_k_m.gguf
     ALLOWED_INPUT_ROOTS: /app/data
   volumes: &app-volumes

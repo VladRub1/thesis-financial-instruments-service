@@ -167,6 +167,9 @@ Notes:
 - `DOCKER_ENABLE_PADDLE=false` (default) keeps the image smaller and avoids platform issues.
 - Paddle wheels are typically available on Linux `x86_64`.
 - On Linux `aarch64` (common on Apple Silicon Docker hosts), Paddle builds may fail due to missing wheels.
+- For server stability, this project pins `paddlepaddle==3.2.0` and `paddleocr==3.3.3`.
+- Paddle runs CPU-only in the worker (`enable_mkldnn=False`, `cpu_threads=8`) to avoid OneDNN runtime crashes (`ConvertPirAttribute2RuntimeAttribute`).
+- Paddle model cache is persisted at `PADDLE_PDX_CACHE_HOME` (compose default: `/app/data/paddle-cache`) so models are not re-downloaded on each container restart.
 
 ### Access
 
@@ -220,7 +223,7 @@ Open http://localhost:8501 after starting all services. The sidebar lets you con
 ### Sidebar settings
 
 - **Pipeline** — `ocr+extract` runs OCR followed by LLM field extraction; `ocr_only` runs OCR and skips the LLM step (useful for inspecting raw OCR quality).
-- **OCR engine** — `tesseract` (default, lightweight) or `paddleocr` (requires Docker build with `DOCKER_ENABLE_PADDLE=true` or local install with `uv sync --extra paddle`).
+- **OCR engine** — `tesseract` (default, lightweight) or `paddleocr` (requires Docker build with `DOCKER_ENABLE_PADDLE=true` or local install with `uv sync --extra paddle`; server mode uses pinned CPU-only Paddle settings).
 - **Language** — Tesseract language codes to use during recognition. `rus+eng` applies both Russian and English models simultaneously, which is important for bank guarantees that mix Cyrillic body text with Latin abbreviations, BIC codes, and legal references. Other common values: `rus` (Russian only), `eng` (English only). You can use any language code installed via `tesseract-lang`.
 
 ### Workflow
@@ -520,6 +523,7 @@ Tests use an in-memory SQLite database and mock the Redis queue + LLM engine —
 | `LLM_MAX_RETRIES`    | `2`                            | Retry count for failed JSON validation   |
 | `DEFAULT_OCR_ENGINE`  | `tesseract`                   | Default OCR engine                       |
 | `TESSERACT_CMD`       | `tesseract`                   | Path to tesseract binary                 |
+| `PADDLE_PDX_CACHE_HOME` | `data/paddle-cache`        | Persistent Paddle model cache directory  |
 | `PROCESSED_DIR`       | `data/processed`              | Root for output artifacts                |
 | `UPLOAD_DIR`          | `data/uploads`                | Directory for uploaded files             |
 | `COPY_SOURCE_PDF`     | `false`                       | Copy source PDF into output directory    |

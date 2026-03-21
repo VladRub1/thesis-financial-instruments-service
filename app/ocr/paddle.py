@@ -5,11 +5,13 @@ Requires PaddleOCR >= 3.0 (PP-OCRv5).
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
 from PIL import Image
 
+from app.core.config import settings
 from app.ocr.base import (
     BlockResult,
     LineResult,
@@ -35,6 +37,10 @@ def _rec_model(tesseract_lang: str) -> str:
 
 class PaddleEngine(OCREngine):
     def __init__(self, lang: str = "rus+eng"):
+        cache_home = Path(settings.PADDLE_PDX_CACHE_HOME)
+        cache_home.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("PADDLE_PDX_CACHE_HOME", str(cache_home.resolve()))
+
         try:
             from paddleocr import PaddleOCR  # type: ignore[import-untyped]
         except ImportError as exc:
@@ -49,6 +55,8 @@ class PaddleEngine(OCREngine):
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
+            enable_mkldnn=False,
+            cpu_threads=8,
         )
 
     def name(self) -> str:
