@@ -4,6 +4,9 @@ Usage examples:
     uv run python -m app.cli.validate sample --n 200 --seed 42
     uv run python -m app.cli.validate run --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
         --ocr-engine tesseract --extractor llm --llm-model models/qwen3-4b-instruct-2507-q5_k_m.gguf
+    uv run python -m app.cli.validate run --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
+        --ocr-engine tesseract --extractor llm --llm-model models/qwen3-4b-instruct-2507-q5_k_m.gguf \
+        --llm-device cuda --llm-n-gpu-layers -1
     uv run python -m app.cli.validate metrics --run-id <id> --out-md report.md
 """
 from __future__ import annotations
@@ -81,6 +84,8 @@ def cmd_run(args: argparse.Namespace) -> None:
         ocr_engine=args.ocr_engine,
         extractor=args.extractor,
         llm_model=args.llm_model,
+        llm_device=args.llm_device,
+        llm_n_gpu_layers=args.llm_n_gpu_layers,
         keep_artifacts=args.keep_artifacts,
     )
     log.info("Run ID: %s", run_id)
@@ -94,6 +99,8 @@ def cmd_run(args: argparse.Namespace) -> None:
         extractor=args.extractor,
         lang=args.lang,
         llm_model_path=args.llm_model,
+        llm_device=args.llm_device,
+        llm_n_gpu_layers=args.llm_n_gpu_layers,
         keep_artifacts=args.keep_artifacts,
         workers=args.workers,
         llm_workers=args.llm_workers,
@@ -188,6 +195,10 @@ def main() -> None:
     rp.add_argument("--workers", type=int, default=2, help="OCR parallelism (default: 2)")
     rp.add_argument("--llm-workers", type=int, default=1,
                      help="LLM concurrency — careful with memory (default: 1)")
+    rp.add_argument("--llm-device", choices=["cpu", "cuda"], default="cpu",
+                     help="LLM device for validation runs (default: cpu)")
+    rp.add_argument("--llm-n-gpu-layers", type=int, default=0,
+                     help="llama-cpp n_gpu_layers for CUDA (-1 = full offload, default: 0)")
     rp.add_argument("--out-run-id", default=None, help="Override auto-generated run ID")
 
     # -- metrics --

@@ -381,13 +381,50 @@ Options:
 
 The seed file is a CSV containing all GT columns for the sampled rows. Re-running with the same `--n` and `--seed` produces the identical sample.
 
-#### 1.2 `sample` — create a reproducible document subset
+#### 1.2 Bundle a sampled subset (helper)
 
 ```bash
 uv run python app/validation/bundle_validation_sample.py \
   --seed-file data/processed/validation/seeds/seed_n=10_seed=42.csv \
   --out-dir data/processed/validation/bundles/n10_seed42 \
   --archive data/processed/validation/bundles/n10_seed42.tar.gz
+```
+
+#### 1.3 Fetch a validation bundle from Dropbox (helper)
+
+```bash
+bash scripts/fetch_validation_bundle.sh \
+  "https://www.dropbox.com/scl/fi/<id>/validation_bundle.tar.gz?dl=0" \
+  data/processed/validation/bundles/from_dropbox \
+  validation_bundle.tar.gz
+```
+
+### Colab GPU setup (validation-only)
+
+Validation CLI can run LLM extraction with CUDA in Colab while leaving the web service CPU-oriented.
+
+```bash
+# System deps
+apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng
+
+# Project deps
+uv sync
+
+# Optional PaddleOCR in Colab (if GPU wheel is available for your runtime)
+# uv pip install paddleocr==3.3.3 paddlepaddle-gpu==3.2.0
+
+# Reinstall llama-cpp-python with CUDA
+CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 uv pip install --force-reinstall --no-cache-dir llama-cpp-python
+```
+
+Run validation with CUDA offload:
+
+```bash
+uv run python -m app.cli.validate run \
+  --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
+  --ocr-engine tesseract --extractor llm \
+  --llm-model models/qwen3-4b-instruct-2507-q5_k_m.gguf \
+  --llm-device cuda --llm-n-gpu-layers -1
 ```
 
 
@@ -423,6 +460,8 @@ Options:
 - `--ocr-engine {tesseract,paddleocr}` — OCR backend (required)
 - `--extractor {llm,regex}` — extraction method (required)
 - `--llm-model <path>` — GGUF model file (required for `--extractor llm`)
+- `--llm-device {cpu,cuda}` — validation LLM device (default: `cpu`)
+- `--llm-n-gpu-layers <int>` — llama-cpp `n_gpu_layers` (`0` default CPU behavior, `-1` full offload)
 - `--workers <int>` — OCR/regex parallelism (default: 2)
 - `--llm-workers <int>` — LLM concurrency; careful with memory (default: 1)
 - `--batch-size <int>` — checkpoint every N docs (default: 10)

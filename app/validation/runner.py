@@ -43,6 +43,13 @@ def _suppress_native_stderr():
         os.close(old_fd)
 
 
+def _validation_n_gpu_layers(llm_device: str, llm_n_gpu_layers: int) -> int | None:
+    """Map validation CLI device flags to llama-cpp n_gpu_layers."""
+    if llm_device == "cuda":
+        return llm_n_gpu_layers
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Single-document processing  (designed to run in a worker process)
 # ---------------------------------------------------------------------------
@@ -124,6 +131,8 @@ def process_single_document(
     extractor: str,
     lang: str = "rus+eng",
     llm_model_path: str | None = None,
+    llm_device: str = "cpu",
+    llm_n_gpu_layers: int = 0,
     keep_artifacts: bool = False,
     run_id: str | None = None,
 ) -> dict:
@@ -163,7 +172,9 @@ def process_single_document(
             from app.llm.engine import LLMEngine
             from app.llm.extract import extract_fields
 
-            llm = LLMEngine()
+            llm = LLMEngine(
+                n_gpu_layers=_validation_n_gpu_layers(llm_device, llm_n_gpu_layers),
+            )
             if llm_model_path:
                 from app.core.config import settings
                 settings.LLM_MODEL_PATH = llm_model_path
@@ -277,13 +288,17 @@ def _run_batch_llm_subprocess(
     ocr_engine_name: str,
     lang: str,
     llm_model_path: str | None,
+    llm_device: str,
+    llm_n_gpu_layers: int,
     keep_artifacts: bool,
     run_id: str,
 ) -> list[dict]:
     """Subprocess entry: load model once, process items, unload."""
     from app.llm.engine import LLMEngine
 
-    llm = LLMEngine()
+    llm = LLMEngine(
+        n_gpu_layers=_validation_n_gpu_layers(llm_device, llm_n_gpu_layers),
+    )
     if llm_model_path:
         from app.core.config import settings
         settings.LLM_MODEL_PATH = llm_model_path
@@ -309,6 +324,8 @@ def run_evaluation(
     extractor: str,
     lang: str = "rus+eng",
     llm_model_path: str | None = None,
+    llm_device: str = "cpu",
+    llm_n_gpu_layers: int = 0,
     keep_artifacts: bool = False,
     workers: int = 2,
     llm_workers: int = 1,
@@ -344,14 +361,16 @@ def run_evaluation(
             # Sequential: load model once, keep it across all batches
             from app.llm.engine import LLMEngine
 
-            llm = LLMEngine()
+            llm = LLMEngine(
+                n_gpu_layers=_validation_n_gpu_layers(llm_device, llm_n_gpu_layers),
+            )
             if llm_model_path:
                 from app.core.config import settings
                 settings.LLM_MODEL_PATH = llm_model_path
             log.info("Loading LLM model (noise suppressed) …")
             with _suppress_native_stderr():
                 llm.load()
-            log.info("LLM model ready.")
+            log.info("LLM model ready (device=%s, n_gpu_layers=%s).", llm_device, llm_n_gpu_layers)
 
             for batch_start in range(0, total, batch_size):
                 batch_items = [
@@ -389,7 +408,7 @@ def run_evaluation(
                     futures = {
                         pool.submit(
                             _run_batch_llm_subprocess, chunk, ocr_engine, lang,
-                            llm_model_path, keep_artifacts, run_id,
+                            llm_model_path, llm_device, llm_n_gpu_layers, keep_artifacts, run_id,
                         ): chunk
                         for chunk in chunks
                     }

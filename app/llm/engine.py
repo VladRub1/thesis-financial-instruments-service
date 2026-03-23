@@ -13,8 +13,9 @@ _instance: LLMEngine | None = None
 
 
 class LLMEngine:
-    def __init__(self) -> None:
+    def __init__(self, *, n_gpu_layers: int | None = None) -> None:
         self._model = None
+        self._n_gpu_layers = n_gpu_layers
 
     def load(self) -> None:
         if self._model is not None:
@@ -22,11 +23,16 @@ class LLMEngine:
         from llama_cpp import Llama  # type: ignore[import-untyped]
 
         log.info("Loading LLM model from %s …", settings.LLM_MODEL_PATH)
+        kwargs: dict = {
+            "model_path": settings.LLM_MODEL_PATH,
+            "n_ctx": settings.LLM_N_CTX,
+            "n_threads": settings.LLM_THREADS,
+            "verbose": settings.DEBUG,
+        }
+        if self._n_gpu_layers is not None:
+            kwargs["n_gpu_layers"] = self._n_gpu_layers
         self._model = Llama(
-            model_path=settings.LLM_MODEL_PATH,
-            n_ctx=settings.LLM_N_CTX,
-            n_threads=settings.LLM_THREADS,
-            verbose=settings.DEBUG,
+            **kwargs,
         )
         log.info("LLM model loaded.")
 
