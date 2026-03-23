@@ -367,7 +367,7 @@ All commands are run via:
 uv run python -m app.cli.validate <command> [options]
 ```
 
-#### 1. `sample` — create a reproducible document subset
+#### 1.1 `sample` — create a reproducible document subset
 
 ```bash
 uv run python -m app.cli.validate sample --n 200 --seed 42
@@ -380,6 +380,16 @@ Options:
 - `--dataset <path>` — path to dataset.csv (has a sensible default)
 
 The seed file is a CSV containing all GT columns for the sampled rows. Re-running with the same `--n` and `--seed` produces the identical sample.
+
+#### 1.2 `sample` — create a reproducible document subset
+
+```bash
+uv run python app/validation/bundle_validation_sample.py \
+  --seed-file data/processed/validation/seeds/seed_n=10_seed=42.csv \
+  --out-dir data/processed/validation/bundles/n10_seed42 \
+  --archive data/processed/validation/bundles/n10_seed42.tar.gz
+```
+
 
 #### 2. `run` — process documents through OCR + extraction
 
