@@ -57,6 +57,8 @@ def write_run_metadata(
     ocr_engine: str,
     extractor: str,
     llm_model: str | None = None,
+    llm_device: str | None = None,
+    llm_n_gpu_layers: int | None = None,
     regex_version: str = "v1",
     keep_artifacts: bool = False,
     extra: dict | None = None,
@@ -76,6 +78,8 @@ def write_run_metadata(
         "ocr_engine": ocr_engine,
         "extractor": extractor,
         "llm_model": llm_model,
+        "llm_device": llm_device,
+        "llm_n_gpu_layers": llm_n_gpu_layers,
         "regex_version": regex_version,
         "keep_artifacts": keep_artifacts,
     }
