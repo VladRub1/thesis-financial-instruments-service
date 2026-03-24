@@ -13,7 +13,7 @@ os.environ.setdefault("DISABLE_MODEL_SOURCE_CHECK", "True")
 from PIL import Image
 
 from app.core.config import settings
-from app.core.logging import setup_logging
+from app.core.logging import get_logger, setup_logging
 from app.ocr.base import (
     BlockResult,
     LineResult,
@@ -21,6 +21,8 @@ from app.ocr.base import (
     PageResult,
     WordResult,
 )
+
+log = get_logger(__name__)
 
 _LANG_TO_REC_MODEL: dict[str, str] = {
     "rus":     "eslav_PP-OCRv5_mobile_rec",
@@ -37,6 +39,31 @@ def _rec_model(tesseract_lang: str) -> str:
     return _LANG_TO_REC_MODEL.get(key, "eslav_PP-OCRv5_mobile_rec")
 
 
+def _assert_paddle_runtime_compatibility() -> None:
+    """Fail fast on incompatible Paddle runtime variants (common in Colab)."""
+    try:
+        import paddle  # type: ignore[import-untyped]
+        from paddle import inference as paddle_infer  # type: ignore[import-untyped]
+    except Exception as exc:
+        raise RuntimeError(
+            "Paddle runtime is unavailable. Install compatible versions: "
+            "paddleocr==3.3.3 and a Paddle 3.x runtime "
+            "(paddlepaddle or paddlepaddle-gpu)."
+        ) from exc
+
+    config_cls = getattr(paddle_infer, "Config", None)
+    has_opt_level = bool(config_cls) and hasattr(config_cls, "set_optimization_level")
+    if not has_opt_level:
+        paddle_version = getattr(paddle, "__version__", "unknown")
+        raise RuntimeError(
+            "Incompatible paddlepaddle runtime detected "
+            f"(found: {paddle_version}). PaddleOCR 3.3.3 expects "
+            "`paddle.inference.Config.set_optimization_level`. "
+            "Do not use `paddlepaddle-gpu` 2.x here. "
+            "Use a Paddle 3.x runtime compatible with PaddleOCR 3.3.3."
+        )
+
+
 class PaddleEngine(OCREngine):
     def __init__(self, lang: str = "rus+eng"):
         cache_home = Path(settings.PADDLE_PDX_CACHE_HOME)
@@ -50,16 +77,34 @@ class PaddleEngine(OCREngine):
                 "PaddleOCR is not installed. Install with: uv pip install paddleocr paddlepaddle"
             ) from exc
 
+        _assert_paddle_runtime_compatibility()
+        paddle_device = (os.environ.get("PADDLE_OCR_DEVICE") or "cpu").strip() or "cpu"
+        if paddle_device.startswith("gpu"):
+            import paddle  # type: ignore[import-untyped]
+
+            if not paddle.is_compiled_with_cuda():
+                raise RuntimeError(
+                    "Paddle GPU device requested via PADDLE_OCR_DEVICE, but current "
+                    "paddle runtime is not CUDA-enabled."
+                )
+
         rec_model = _rec_model(lang)
+        ocr_kwargs: dict = {
+            "text_detection_model_name": "PP-OCRv5_mobile_det",
+            "text_recognition_model_name": rec_model,
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "use_textline_orientation": False,
+            "device": paddle_device,
+        }
+        if paddle_device == "cpu":
+            ocr_kwargs["enable_mkldnn"] = True
+            ocr_kwargs["cpu_threads"] = 8
+
         self._ocr = PaddleOCR(
-            text_detection_model_name="PP-OCRv5_mobile_det",
-            text_recognition_model_name=rec_model,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-            enable_mkldnn=True,
-            cpu_threads=8,
+            **ocr_kwargs,
         )
+        log.info("PaddleOCR ready (device=%s)", paddle_device)
         # Paddle may reconfigure root logging; restore project logging format/level.
         setup_logging(settings.DEBUG)
 
@@ -76,8 +121,6 @@ class PaddleEngine(OCREngine):
     def run_page(self, image: Image.Image, dpi: int = 300) -> PageResult:
         """PaddleOCR has its own preprocessing — skip ours, pass RGB directly."""
         import numpy as np
-        from app.core.logging import get_logger
-        log = get_logger(__name__)
 
         img_arr = np.array(image.convert("RGB"))
 

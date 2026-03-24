@@ -410,8 +410,16 @@ apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-rus tesseract-o
 # One-command setup: sync (colab extra) + CUDA rebuild + verification
 bash scripts/colab_gpu_setup.sh
 
-# Optional PaddleOCR in Colab (if GPU wheel is available for your runtime)
-# uv pip install --python .venv/bin/python paddleocr==3.3.3 paddlepaddle-gpu
+# One-command setup with PaddleOCR GPU runtime + compatibility checks
+COLAB_WITH_PADDLE=1 bash scripts/colab_gpu_setup.sh
+
+# Optional manual PaddleOCR GPU install (Colab, validation-only)
+# uv pip uninstall --python .venv/bin/python paddlepaddle
+# uv pip install --python .venv/bin/python --force-reinstall \
+#   --index-url https://www.paddlepaddle.org.cn/packages/stable/cu118/ \
+#   --extra-index-url https://pypi.org/simple \
+#   paddlepaddle-gpu==3.0.0 paddleocr==3.3.3
+# Do not install paddlepaddle-gpu 2.x here; it is incompatible with PaddleOCR 3.3.3.
 
 # If you prefer manual setup, run:
 uv sync --extra colab --frozen
@@ -422,7 +430,7 @@ CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 \
 uv run --no-sync python -c "import llama_cpp; support_fn=getattr(llama_cpp, 'llama_supports_gpu_offload', None); print('llama_cpp module:', getattr(llama_cpp, '__file__', 'unknown')); print('llama_cpp version:', getattr(llama_cpp, '__version__', 'unknown')); print('gpu_offload_support:', bool(support_fn()) if callable(support_fn) else 'unknown')"
 ```
 
-If `uv pip` prints `Using Python ... at: /usr`, you are installing into the wrong environment; pass `--python .venv/bin/python` as shown above. In Colab, run sync first, then CUDA reinstall, and avoid running `uv sync` again afterwards in the same session. Use `uv run --no-sync ...` for verification and validation so lockfile sync does not replace your CUDA build. In notebooks, use `%env UV_NO_SYNC=1` (not `!export UV_NO_SYNC=1`) if you want the setting to persist across cells.
+If `uv pip` prints `Using Python ... at: /usr`, you are installing into the wrong environment; pass `--python .venv/bin/python` as shown above. In Colab, run sync first, then CUDA reinstall, and avoid running `uv sync` again afterwards in the same session. Use `uv run --no-sync ...` for verification and validation so lockfile sync does not replace your CUDA build. In notebooks, use `%env UV_NO_SYNC=1` (not `!export UV_NO_SYNC=1`) if you want the setting to persist across cells. For `--ocr-engine paddleocr`, validation auto-enables `gpu:0` on Colab only; service/local behavior stays unchanged.
 
 Run validation with CUDA offload:
 
