@@ -69,7 +69,9 @@ class LLMEngine:
         if self._require_gpu_offload and offload_requested and gpu_offload_supported is False:
             raise RuntimeError(
                 "GPU offload was requested, but llama.cpp reports no GPU support. "
-                "Install CUDA-enabled llama-cpp-python in the same environment used by `uv run`."
+                "Install CUDA-enabled llama-cpp-python in the same environment used by `uv run`. "
+                "In Colab, `uv run` may re-sync from lock and replace custom builds; use "
+                "`uv run --no-sync ...` (or `.venv/bin/python`) after installing the CUDA build."
             )
         self._model = Llama(
             **kwargs,

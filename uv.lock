@@ -2458,6 +2458,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+colab = [
+    { name = "llama-cpp-python" },
+]
 dev = [
     { name = "aiosqlite" },
     { name = "httpx" },
@@ -2481,6 +2484,7 @@ requires-dist = [
     { name = "huggingface-hub" },
     { name = "ipykernel", specifier = ">=7.2.0" },
     { name = "llama-cpp-python" },
+    { name = "llama-cpp-python", marker = "extra == 'colab'", specifier = "==0.3.16" },
     { name = "numpy" },
     { name = "paddleocr", marker = "extra == 'paddle'", specifier = "==3.3.3" },
     { name = "paddlepaddle", marker = "extra == 'paddle'", specifier = "==3.2.0" },
@@ -2503,7 +2507,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"] },
     { name = "watchdog", specifier = ">=6.0.0" },
 ]
-provides-extras = ["paddle", "dev"]
+provides-extras = ["paddle", "colab", "dev"]
 
 [[package]]
 name = "toml"

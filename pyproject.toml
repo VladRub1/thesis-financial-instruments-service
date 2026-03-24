@@ -35,6 +35,9 @@ paddle = [
     "paddleocr==3.3.3",
     "paddlepaddle==3.2.0",
 ]
+colab = [
+    "llama-cpp-python==0.3.16",
+]
 dev = [
     "pytest",
     "pytest-asyncio",

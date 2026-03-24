@@ -407,32 +407,27 @@ Validation CLI can run LLM extraction with CUDA in Colab while leaving the web s
 # System deps
 apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng
 
-# Project deps
-uv sync
+# One-command setup: sync (colab extra) + CUDA rebuild + verification
+bash scripts/colab_gpu_setup.sh
 
 # Optional PaddleOCR in Colab (if GPU wheel is available for your runtime)
 # uv pip install --python .venv/bin/python paddleocr==3.3.3 paddlepaddle-gpu
 
-# Reinstall llama-cpp-python with CUDA into the same .venv used by `uv run`
+# If you prefer manual setup, run:
+uv sync --extra colab --frozen
 CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 \
-  uv pip install --python .venv/bin/python --force-reinstall --no-cache-dir llama-cpp-python
+  uv pip install --python .venv/bin/python --force-reinstall --no-cache-dir llama-cpp-python==0.3.16
 
 # Verify GPU offload support from that environment
-uv run python - <<'PY'
-import llama_cpp
-support_fn = getattr(llama_cpp, "llama_supports_gpu_offload", None)
-print("llama_cpp module:", getattr(llama_cpp, "__file__", "unknown"))
-print("llama_cpp version:", getattr(llama_cpp, "__version__", "unknown"))
-print("gpu_offload_support:", bool(support_fn()) if callable(support_fn) else "unknown")
-PY
+uv run --no-sync python -c "import llama_cpp; support_fn=getattr(llama_cpp, 'llama_supports_gpu_offload', None); print('llama_cpp module:', getattr(llama_cpp, '__file__', 'unknown')); print('llama_cpp version:', getattr(llama_cpp, '__version__', 'unknown')); print('gpu_offload_support:', bool(support_fn()) if callable(support_fn) else 'unknown')"
 ```
 
-If `uv pip` prints `Using Python ... at: /usr`, you are installing into the wrong environment; pass `--python .venv/bin/python` as shown above. In Colab, run `uv sync` first, then CUDA reinstall, and avoid running `uv sync` again afterwards in the same session.
+If `uv pip` prints `Using Python ... at: /usr`, you are installing into the wrong environment; pass `--python .venv/bin/python` as shown above. In Colab, run sync first, then CUDA reinstall, and avoid running `uv sync` again afterwards in the same session. Use `uv run --no-sync ...` (or `export UV_NO_SYNC=1`) for verification and validation so lockfile sync does not replace your CUDA build.
 
 Run validation with CUDA offload:
 
 ```bash
-uv run python -m app.cli.validate run \
+uv run --no-sync python -m app.cli.validate run \
   --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
   --ocr-engine tesseract --extractor llm \
   --llm-model models/qwen3-4b-instruct-2507-q5_k_m.gguf \
