@@ -67,6 +67,18 @@ def cmd_run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     seed_df = pd.read_csv(seed_path, dtype={"bank_inn": str, "pcpl_inn": str, "bene_inn": str, "ikz": str})
+    seed_root = seed_path.parent.resolve()
+
+    def _resolve_stored_path(p: object) -> str:
+        p_str = str(p).strip()
+        if not p_str:
+            return p_str
+        candidate = Path(p_str).expanduser()
+        if candidate.is_absolute():
+            return str(candidate)
+        return str((seed_root / candidate).resolve())
+
+    seed_df["stored_path"] = seed_df["stored_path"].map(_resolve_stored_path)
     log.info("Loaded seed file: %d documents", len(seed_df))
 
     missing = seed_df[~seed_df["stored_path"].apply(lambda p: Path(p).exists())]
