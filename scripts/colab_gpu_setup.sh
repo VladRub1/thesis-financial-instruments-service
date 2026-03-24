@@ -19,4 +19,5 @@ echo "[3/3] Verifying GPU offload support..."
 uv run --no-sync python -c "import sys, llama_cpp; support_fn=getattr(llama_cpp, 'llama_supports_gpu_offload', None); supported=bool(support_fn()) if callable(support_fn) else None; print('llama_cpp module:', getattr(llama_cpp, '__file__', 'unknown')); print('llama_cpp version:', getattr(llama_cpp, '__version__', 'unknown')); print('gpu_offload_support:', supported if supported is not None else 'unknown'); sys.exit(0 if supported else 2)"
 
 echo
-echo "Done. Keep using 'uv run --no-sync ...' (or export UV_NO_SYNC=1) for validation commands in this session."
+echo "Done. Keep using 'uv run --no-sync ...' for validation commands in this session."
+echo "In notebooks, persist no-sync with: %env UV_NO_SYNC=1"

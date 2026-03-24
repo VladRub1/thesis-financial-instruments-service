@@ -422,7 +422,7 @@ CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 \
 uv run --no-sync python -c "import llama_cpp; support_fn=getattr(llama_cpp, 'llama_supports_gpu_offload', None); print('llama_cpp module:', getattr(llama_cpp, '__file__', 'unknown')); print('llama_cpp version:', getattr(llama_cpp, '__version__', 'unknown')); print('gpu_offload_support:', bool(support_fn()) if callable(support_fn) else 'unknown')"
 ```
 
-If `uv pip` prints `Using Python ... at: /usr`, you are installing into the wrong environment; pass `--python .venv/bin/python` as shown above. In Colab, run sync first, then CUDA reinstall, and avoid running `uv sync` again afterwards in the same session. Use `uv run --no-sync ...` (or `export UV_NO_SYNC=1`) for verification and validation so lockfile sync does not replace your CUDA build.
+If `uv pip` prints `Using Python ... at: /usr`, you are installing into the wrong environment; pass `--python .venv/bin/python` as shown above. In Colab, run sync first, then CUDA reinstall, and avoid running `uv sync` again afterwards in the same session. Use `uv run --no-sync ...` for verification and validation so lockfile sync does not replace your CUDA build. In notebooks, use `%env UV_NO_SYNC=1` (not `!export UV_NO_SYNC=1`) if you want the setting to persist across cells.
 
 Run validation with CUDA offload:
 

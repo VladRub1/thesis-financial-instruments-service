@@ -56,6 +56,13 @@ def _validation_require_gpu_offload(llm_device: str, llm_n_gpu_layers: int) -> b
     return llm_device == "cuda" and llm_n_gpu_layers != 0
 
 
+def _fmt_duration(ms: float) -> str:
+    """Human-friendly duration formatting for progress logs."""
+    if ms < 1000:
+        return f"{ms:.0f}ms"
+    return f"{ms / 1000:.1f}s"
+
+
 # ---------------------------------------------------------------------------
 # Single-document processing  (designed to run in a worker process)
 # ---------------------------------------------------------------------------
