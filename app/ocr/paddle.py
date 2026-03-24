@@ -47,8 +47,7 @@ def _assert_paddle_runtime_compatibility() -> None:
     except Exception as exc:
         raise RuntimeError(
             "Paddle runtime is unavailable. Install compatible versions: "
-            "paddleocr==3.3.3 and a Paddle 3.x runtime "
-            "(paddlepaddle or paddlepaddle-gpu)."
+            "paddleocr==3.3.3 and paddlepaddle==3.2.0."
         ) from exc
 
     config_cls = getattr(paddle_infer, "Config", None)
@@ -59,8 +58,7 @@ def _assert_paddle_runtime_compatibility() -> None:
             "Incompatible paddlepaddle runtime detected "
             f"(found: {paddle_version}). PaddleOCR 3.3.3 expects "
             "`paddle.inference.Config.set_optimization_level`. "
-            "Do not use `paddlepaddle-gpu` 2.x here. "
-            "Use a Paddle 3.x runtime compatible with PaddleOCR 3.3.3."
+            "Do not use `paddlepaddle-gpu` 2.x here; install `paddlepaddle==3.2.0`."
         )
 
 
@@ -78,33 +76,18 @@ class PaddleEngine(OCREngine):
             ) from exc
 
         _assert_paddle_runtime_compatibility()
-        paddle_device = (os.environ.get("PADDLE_OCR_DEVICE") or "cpu").strip() or "cpu"
-        if paddle_device.startswith("gpu"):
-            import paddle  # type: ignore[import-untyped]
-
-            if not paddle.is_compiled_with_cuda():
-                raise RuntimeError(
-                    "Paddle GPU device requested via PADDLE_OCR_DEVICE, but current "
-                    "paddle runtime is not CUDA-enabled."
-                )
-
         rec_model = _rec_model(lang)
-        ocr_kwargs: dict = {
-            "text_detection_model_name": "PP-OCRv5_mobile_det",
-            "text_recognition_model_name": rec_model,
-            "use_doc_orientation_classify": False,
-            "use_doc_unwarping": False,
-            "use_textline_orientation": False,
-            "device": paddle_device,
-        }
-        if paddle_device == "cpu":
-            ocr_kwargs["enable_mkldnn"] = True
-            ocr_kwargs["cpu_threads"] = 8
-
         self._ocr = PaddleOCR(
-            **ocr_kwargs,
+            text_detection_model_name="PP-OCRv5_mobile_det",
+            text_recognition_model_name=rec_model,
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+            device="cpu",
+            enable_mkldnn=True,
+            cpu_threads=8,
         )
-        log.info("PaddleOCR ready (device=%s)", paddle_device)
+        log.info("PaddleOCR ready (device=cpu)")
         # Paddle may reconfigure root logging; restore project logging format/level.
         setup_logging(settings.DEBUG)
 

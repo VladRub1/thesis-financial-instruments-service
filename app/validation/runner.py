@@ -56,20 +56,6 @@ def _validation_require_gpu_offload(llm_device: str, llm_n_gpu_layers: int) -> b
     return llm_device == "cuda" and llm_n_gpu_layers != 0
 
 
-def _is_colab_runtime() -> bool:
-    """Best-effort Colab detection for validation-only runtime tweaks."""
-    return bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("COLAB_GPU"))
-
-
-def _validation_paddle_device(ocr_engine: str) -> str | None:
-    """Select Paddle device for validation runs (Colab-only GPU auto mode)."""
-    if ocr_engine != "paddleocr":
-        return None
-    if _is_colab_runtime():
-        os.environ.setdefault("PADDLE_OCR_DEVICE", "gpu:0")
-    return os.environ.get("PADDLE_OCR_DEVICE")
-
-
 def _fmt_duration(ms: float) -> str:
     """Human-friendly duration formatting for progress logs."""
     if ms < 1000:
@@ -383,15 +369,6 @@ def run_evaluation(
         return existing
 
     log.info("Processing %d documents (engine=%s extractor=%s)", total, ocr_engine, extractor)
-    paddle_device = _validation_paddle_device(ocr_engine)
-    if ocr_engine == "paddleocr":
-        if paddle_device:
-            if _is_colab_runtime():
-                log.info("Paddle validation runtime: device=%s (Colab auto-enabled)", paddle_device)
-            else:
-                log.info("Paddle validation runtime: device=%s", paddle_device)
-        else:
-            log.info("Paddle validation runtime: device=cpu")
 
     all_new_rows: list[dict] = []
     succeeded = sum(1 for _, r in existing.iterrows() if r.get("status") == "succeeded") if not existing.empty else 0
