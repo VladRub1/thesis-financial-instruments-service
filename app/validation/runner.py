@@ -13,6 +13,7 @@ import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 from tqdm import tqdm
@@ -180,7 +181,7 @@ def process_single_document(
                 settings.LLM_MODEL_PATH = llm_model_path
             with _suppress_native_stderr():
                 llm.load()
-            result = extract_fields(ocr_md, None, engine=llm)
+            result = extract_fields(ocr_md, None, engine=llm, trace_id=str(doc_id))
             if result.validated:
                 pred = result.validated.model_dump(mode="json")
             else:
@@ -223,6 +224,7 @@ def _process_items_with_llm(
     llm,
     keep_artifacts: bool,
     run_id: str,
+    progress_cb: Callable[[dict], None] | None = None,
 ) -> list[dict]:
     """Process items sequentially using a pre-loaded LLM instance."""
     from app.llm.extract import extract_fields
@@ -230,14 +232,16 @@ def _process_items_with_llm(
 
     engine = get_ocr_engine(ocr_engine_name, lang)
     results: list[dict] = []
+    n_items = len(items)
 
-    for doc_id, stored_path, gold_row in items:
+    for idx, (doc_id, stored_path, gold_row) in enumerate(items, start=1):
         timings: dict[str, float] = {}
         pred: dict = {}
         status = "succeeded"
         error_msg = None
         t_total = time.perf_counter()
 
+        log.info("[llm] Start doc_id=%s (%d/%d)", doc_id, idx, n_items)
         try:
             t0 = time.perf_counter()
             images = _file_to_images(Path(stored_path))
@@ -254,7 +258,7 @@ def _process_items_with_llm(
                 (art / "ocr.md").write_text(ocr_md, encoding="utf-8")
 
             t1 = time.perf_counter()
-            result = extract_fields(ocr_md, None, engine=llm)
+            result = extract_fields(ocr_md, None, engine=llm, trace_id=str(doc_id))
             if result.validated:
                 pred = result.validated.model_dump(mode="json")
             else:
@@ -280,6 +284,8 @@ def _process_items_with_llm(
             gold=norm_gold, pred=norm_pred, diags=diags_list,
             timings=timings, status=status, error_msg=error_msg,
         ))
+        if progress_cb:
+            progress_cb(results[-1])
     return results
 
 
@@ -353,10 +359,33 @@ def run_evaluation(
     all_new_rows: list[dict] = []
     succeeded = sum(1 for _, r in existing.iterrows() if r.get("status") == "succeeded") if not existing.empty else 0
     failed = sum(1 for _, r in existing.iterrows() if r.get("status") != "succeeded") if not existing.empty else 0
+    processed = 0
+    t_run = time.perf_counter()
 
     pbar = tqdm(total=total, desc=f"eval [{ocr_engine}+{extractor}]", unit="doc")
 
+    def _on_result(r: dict) -> None:
+        nonlocal processed, succeeded, failed
+        processed += 1
+        if r["status"] == "succeeded":
+            succeeded += 1
+        else:
+            failed += 1
+        elapsed_ms = (time.perf_counter() - t_run) * 1000
+        remaining = total - processed
+        eta_ms = (elapsed_ms / processed) * remaining if processed > 0 else 0
+        log.info(
+            "[progress] doc_id=%s status=%s (%d/%d) elapsed=%s eta=%s",
+            r.get("id"), r.get("status"),
+            processed, total,
+            _fmt_duration(elapsed_ms),
+            _fmt_duration(eta_ms) if remaining > 0 else "—",
+        )
+        pbar.update(1)
+        pbar.set_postfix(ok=succeeded, fail=failed)
+
     if extractor == "llm":
+        log.info("LLM validation runtime: device=%s n_gpu_layers=%s", llm_device, llm_n_gpu_layers)
         if llm_workers <= 1:
             # Sequential: load model once, keep it across all batches
             from app.llm.engine import LLMEngine
@@ -379,15 +408,9 @@ def run_evaluation(
                 ]
                 batch_results = _process_items_with_llm(
                     batch_items, ocr_engine, lang, llm, keep_artifacts, run_id,
+                    progress_cb=_on_result,
                 )
-                for r in batch_results:
-                    if r["status"] == "succeeded":
-                        succeeded += 1
-                    else:
-                        failed += 1
                 all_new_rows.extend(batch_results)
-                pbar.update(len(batch_results))
-                pbar.set_postfix(ok=succeeded, fail=failed)
                 storage.append_results(run_id, batch_results)
 
             llm.unload()
@@ -416,13 +439,8 @@ def run_evaluation(
                         batch_results.extend(fut.result())
 
                 for r in batch_results:
-                    if r["status"] == "succeeded":
-                        succeeded += 1
-                    else:
-                        failed += 1
+                    _on_result(r)
                 all_new_rows.extend(batch_results)
-                pbar.update(len(batch_results))
-                pbar.set_postfix(ok=succeeded, fail=failed)
                 storage.append_results(run_id, batch_results)
 
     else:
@@ -458,13 +476,8 @@ def run_evaluation(
                             log.error("Worker failed: %s", exc)
 
             for r in batch_results:
-                if r["status"] == "succeeded":
-                    succeeded += 1
-                else:
-                    failed += 1
+                _on_result(r)
             all_new_rows.extend(batch_results)
-            pbar.update(len(batch_results))
-            pbar.set_postfix(ok=succeeded, fail=failed)
             storage.append_results(run_id, batch_results)
 
     pbar.close()

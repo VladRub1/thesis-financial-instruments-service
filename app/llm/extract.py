@@ -56,6 +56,7 @@ def extract_fields(
     layout_json: dict | None = None,
     schema_version: str = "v1",
     engine: LLMEngine | None = None,
+    trace_id: str | None = None,
 ) -> ExtractionResult:
     """Run LLM extraction with retry logic.  Returns ExtractionResult."""
     if engine is None:
@@ -69,8 +70,10 @@ def extract_fields(
     max_retries = settings.LLM_MAX_RETRIES
     all_errors: list[str] = []
     raw_output = ""
+    log_prefix = f"[{trace_id}] " if trace_id else ""
 
     for attempt in range(1 + max_retries):
+        log.info("%sLLM attempt %d/%d started", log_prefix, attempt + 1, 1 + max_retries)
         try:
             if attempt == 0:
                 raw_output = engine.generate(
@@ -82,7 +85,7 @@ def extract_fields(
                     SYSTEM_PROMPT, retry_prompt, json_schema=schema,
                 )
         except Exception as exc:
-            log.exception("LLM inference error on attempt %d", attempt + 1)
+            log.exception("%sLLM inference error on attempt %d", log_prefix, attempt + 1)
             return ExtractionResult(
                 status="failed_runtime",
                 raw=raw_output,
@@ -92,6 +95,7 @@ def extract_fields(
         data, errors = _try_parse(raw_output)
         if data is not None:
             validated = ExtractionV1.model_validate(data)
+            log.info("%sLLM attempt %d/%d succeeded", log_prefix, attempt + 1, 1 + max_retries)
             return ExtractionResult(
                 status="succeeded",
                 validated=validated,
@@ -100,7 +104,7 @@ def extract_fields(
                 warnings=validated.warnings,
             )
         all_errors = errors
-        log.warning("Attempt %d/%d failed validation: %s", attempt + 1, 1 + max_retries, errors)
+        log.warning("%sAttempt %d/%d failed validation: %s", log_prefix, attempt + 1, 1 + max_retries, errors)
 
     return ExtractionResult(
         status="failed_validation",

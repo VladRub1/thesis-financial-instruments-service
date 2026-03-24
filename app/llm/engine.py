@@ -23,6 +23,16 @@ class LLMEngine:
         from llama_cpp import Llama  # type: ignore[import-untyped]
 
         log.info("Loading LLM model from %s …", settings.LLM_MODEL_PATH)
+        gpu_offload_supported: bool | None = None
+        try:
+            import llama_cpp  # type: ignore[import-untyped]
+
+            support_fn = getattr(llama_cpp, "llama_supports_gpu_offload", None)
+            if callable(support_fn):
+                gpu_offload_supported = bool(support_fn())
+        except Exception:
+            gpu_offload_supported = None
+
         kwargs: dict = {
             "model_path": settings.LLM_MODEL_PATH,
             "n_ctx": settings.LLM_N_CTX,
@@ -31,6 +41,20 @@ class LLMEngine:
         }
         if self._n_gpu_layers is not None:
             kwargs["n_gpu_layers"] = self._n_gpu_layers
+            log.info("LLM offload request: n_gpu_layers=%s", self._n_gpu_layers)
+        if gpu_offload_supported is not None:
+            log.info("llama.cpp GPU offload support: %s", gpu_offload_supported)
+            if (
+                self._n_gpu_layers is not None
+                and self._n_gpu_layers != 0
+                and not gpu_offload_supported
+            ):
+                log.warning(
+                    "GPU offload requested, but llama.cpp reports no GPU offload support. "
+                    "This build will run on CPU."
+                )
+            elif self._n_gpu_layers is not None and self._n_gpu_layers != 0 and gpu_offload_supported:
+                log.info("GPU offload requested and supported by this llama.cpp build.")
         self._model = Llama(
             **kwargs,
         )
