@@ -13,9 +13,15 @@ _instance: LLMEngine | None = None
 
 
 class LLMEngine:
-    def __init__(self, *, n_gpu_layers: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        n_gpu_layers: int | None = None,
+        require_gpu_offload: bool = False,
+    ) -> None:
         self._model = None
         self._n_gpu_layers = n_gpu_layers
+        self._require_gpu_offload = require_gpu_offload
 
     def load(self) -> None:
         if self._model is not None:
@@ -27,6 +33,11 @@ class LLMEngine:
         try:
             import llama_cpp  # type: ignore[import-untyped]
 
+            log.info(
+                "llama_cpp module: %s (version=%s)",
+                getattr(llama_cpp, "__file__", "unknown"),
+                getattr(llama_cpp, "__version__", "unknown"),
+            )
             support_fn = getattr(llama_cpp, "llama_supports_gpu_offload", None)
             if callable(support_fn):
                 gpu_offload_supported = bool(support_fn())
@@ -42,19 +53,24 @@ class LLMEngine:
         if self._n_gpu_layers is not None:
             kwargs["n_gpu_layers"] = self._n_gpu_layers
             log.info("LLM offload request: n_gpu_layers=%s", self._n_gpu_layers)
+        offload_requested = self._n_gpu_layers is not None and self._n_gpu_layers != 0
         if gpu_offload_supported is not None:
             log.info("llama.cpp GPU offload support: %s", gpu_offload_supported)
             if (
-                self._n_gpu_layers is not None
-                and self._n_gpu_layers != 0
+                offload_requested
                 and not gpu_offload_supported
             ):
                 log.warning(
                     "GPU offload requested, but llama.cpp reports no GPU offload support. "
                     "This build will run on CPU."
                 )
-            elif self._n_gpu_layers is not None and self._n_gpu_layers != 0 and gpu_offload_supported:
+            elif offload_requested and gpu_offload_supported:
                 log.info("GPU offload requested and supported by this llama.cpp build.")
+        if self._require_gpu_offload and offload_requested and gpu_offload_supported is False:
+            raise RuntimeError(
+                "GPU offload was requested, but llama.cpp reports no GPU support. "
+                "Install CUDA-enabled llama-cpp-python in the same environment used by `uv run`."
+            )
         self._model = Llama(
             **kwargs,
         )

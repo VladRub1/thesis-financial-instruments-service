@@ -411,11 +411,23 @@ apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-rus tesseract-o
 uv sync
 
 # Optional PaddleOCR in Colab (if GPU wheel is available for your runtime)
-# uv pip install paddleocr==3.3.3 paddlepaddle-gpu==3.2.0
+# uv pip install --python .venv/bin/python paddleocr==3.3.3 paddlepaddle-gpu
 
-# Reinstall llama-cpp-python with CUDA
-CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 uv pip install --force-reinstall --no-cache-dir llama-cpp-python
+# Reinstall llama-cpp-python with CUDA into the same .venv used by `uv run`
+CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 \
+  uv pip install --python .venv/bin/python --force-reinstall --no-cache-dir llama-cpp-python
+
+# Verify GPU offload support from that environment
+uv run python - <<'PY'
+import llama_cpp
+support_fn = getattr(llama_cpp, "llama_supports_gpu_offload", None)
+print("llama_cpp module:", getattr(llama_cpp, "__file__", "unknown"))
+print("llama_cpp version:", getattr(llama_cpp, "__version__", "unknown"))
+print("gpu_offload_support:", bool(support_fn()) if callable(support_fn) else "unknown")
+PY
 ```
+
+If `uv pip` prints `Using Python ... at: /usr`, you are installing into the wrong environment; pass `--python .venv/bin/python` as shown above. In Colab, run `uv sync` first, then CUDA reinstall, and avoid running `uv sync` again afterwards in the same session.
 
 Run validation with CUDA offload:
 

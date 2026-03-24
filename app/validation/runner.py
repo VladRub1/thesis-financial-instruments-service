@@ -51,6 +51,11 @@ def _validation_n_gpu_layers(llm_device: str, llm_n_gpu_layers: int) -> int | No
     return None
 
 
+def _validation_require_gpu_offload(llm_device: str, llm_n_gpu_layers: int) -> bool:
+    """Enforce real GPU execution for explicit CUDA validation runs."""
+    return llm_device == "cuda" and llm_n_gpu_layers != 0
+
+
 # ---------------------------------------------------------------------------
 # Single-document processing  (designed to run in a worker process)
 # ---------------------------------------------------------------------------
@@ -175,6 +180,7 @@ def process_single_document(
 
             llm = LLMEngine(
                 n_gpu_layers=_validation_n_gpu_layers(llm_device, llm_n_gpu_layers),
+                require_gpu_offload=_validation_require_gpu_offload(llm_device, llm_n_gpu_layers),
             )
             if llm_model_path:
                 from app.core.config import settings
@@ -304,6 +310,7 @@ def _run_batch_llm_subprocess(
 
     llm = LLMEngine(
         n_gpu_layers=_validation_n_gpu_layers(llm_device, llm_n_gpu_layers),
+        require_gpu_offload=_validation_require_gpu_offload(llm_device, llm_n_gpu_layers),
     )
     if llm_model_path:
         from app.core.config import settings
@@ -392,6 +399,7 @@ def run_evaluation(
 
             llm = LLMEngine(
                 n_gpu_layers=_validation_n_gpu_layers(llm_device, llm_n_gpu_layers),
+                require_gpu_offload=_validation_require_gpu_offload(llm_device, llm_n_gpu_layers),
             )
             if llm_model_path:
                 from app.core.config import settings
