@@ -97,6 +97,7 @@ class LLMEngine:
             "max_tokens": settings.LLM_MAX_TOKENS,
             "temperature": settings.LLM_TEMPERATURE,
             "top_p": settings.LLM_TOP_P,
+            "stop": ["```"],
         }
         if json_schema is not None:
             kwargs["response_format"] = {

@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # LLM
     LLM_MODEL_PATH: str = "models/qwen3-4b-instruct-2507-q5_k_m.gguf"
-    LLM_N_CTX: int = 4096
+    LLM_N_CTX: int = 6144
     LLM_MAX_TOKENS: int = 2048
     LLM_TEMPERATURE: float = 0.0
     LLM_TOP_P: float = 1.0

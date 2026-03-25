@@ -13,7 +13,7 @@ _CURRENCY_MAP = {
 
 def postprocess(data: dict) -> dict:
     """Apply normalisation rules in-place and return the dict."""
-    for key in ("principal_inn", "beneficiary_inn", "ikz"):
+    for key in ("principal_inn", "beneficiary_inn", "bank_inn", "ikz"):
         if data.get(key):
             data[key] = re.sub(r"\D", "", data[key])
 

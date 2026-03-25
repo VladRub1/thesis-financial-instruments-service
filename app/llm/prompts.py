@@ -2,21 +2,32 @@
 from __future__ import annotations
 
 SYSTEM_PROMPT = """\
-You are a structured data extraction assistant.
-You receive OCR text from Russian bank guarantee documents.
-You MUST output a single JSON object and NOTHING ELSE — no markdown, no commentary, no extra keys.
-Rules:
-- Use ISO date format YYYY-MM-DD for all dates.
-- Use decimal numbers with a dot (e.g. 1234567.89).
-- If a field value is unknown or not present in the text, set it to null.
-- Do NOT invent or hallucinate values.
-- INN must be digits only (10 or 12 digits).
-- IKZ must be digits only.
-- Currency should be a 3-letter code: RUB, USD, EUR, etc. Map Russian names (e.g. "рублей" → "RUB").
-- Return ONLY the JSON object.\
+Extract fields from OCR text of Russian bank guarantees.
+Return exactly ONE valid JSON object, no markdown, no prose, no extra keys.
+Use YYYY-MM-DD dates, decimal dot for amount, and null when unknown.
+Do not invent values. INN/IKZ must be digits only.
+Currency should be a 3-letter code: RUB, USD, EUR, etc.\
 """
 
-JSON_TEMPLATE = """\
+JSON_TEMPLATE_V2 = """\
+{
+  "guarantee_number": null,
+  "issue_date": null,
+  "start_date": null,
+  "end_date": null,
+  "amount": null,
+  "currency": null,
+  "principal_inn": null,
+  "beneficiary_inn": null,
+  "ikz": null,
+  "bank_name": null,
+  "bank_inn": null,
+  "schema_version": "v2"
+}\
+"""
+
+
+JSON_TEMPLATE_V1 = """\
 {
   "guarantee_number": null,
   "issue_date": null,
@@ -43,30 +54,36 @@ JSON_TEMPLATE = """\
 """
 
 
-def build_user_prompt(ocr_text: str) -> str:
+def _template(schema_version: str) -> str:
+    return JSON_TEMPLATE_V1 if schema_version == "v1" else JSON_TEMPLATE_V2
+
+
+def build_user_prompt(ocr_text: str, *, schema_version: str = "v2") -> str:
     return (
-        "Extract structured fields from the following OCR text of a Russian bank guarantee.\n\n"
-        "JSON template (fill in values or leave null):\n"
-        f"```json\n{JSON_TEMPLATE}\n```\n\n"
+        "Extract fields from OCR text.\n"
+        "Output ONE valid JSON object only.\n\n"
+        f"Schema template ({schema_version}):\n"
+        f"```json\n{_template(schema_version)}\n```\n\n"
         "OCR text:\n"
         "---\n"
         f"{ocr_text}\n"
-        "---\n\n"
-        "Return ONLY the JSON object."
+        "---"
     )
 
 
-def build_retry_prompt(ocr_text: str, previous_errors: list[str]) -> str:
+def build_retry_prompt(ocr_text: str, previous_errors: list[str], *, schema_version: str = "v2") -> str:
     errors_str = "\n".join(f"- {e}" for e in previous_errors)
     return (
-        "Your previous response had validation errors:\n"
+        "Previous response is invalid.\n"
+        "Fix all errors and return ONE valid JSON object only.\n\n"
+        "Validation errors:\n"
         f"{errors_str}\n\n"
-        "Please fix these errors and try again.\n\n"
+        f"Schema template ({schema_version}):\n"
+        f"```json\n{_template(schema_version)}\n```\n\n"
         "OCR text:\n"
         "---\n"
         f"{ocr_text}\n"
-        "---\n\n"
-        "Return ONLY the valid JSON object."
+        "---"
     )
 
 

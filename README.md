@@ -448,7 +448,7 @@ uv run python -m app.cli.validate run \
   --seed-file data/processed/validation/seeds/seed_n=200_seed=42.csv \
   --ocr-engine tesseract --extractor llm \
   --llm-model models/qwen3-4b-instruct-2507-q5_k_m.gguf \
-  --workers 4 --batch-size 10
+  --workers 4 --batch-size 32
 
 # PaddleOCR + LLM
 uv run python -m app.cli.validate run \
@@ -476,11 +476,15 @@ Options:
 - `--llm-n-gpu-layers <int>` — llama-cpp `n_gpu_layers` (`0` default CPU behavior, `-1` full offload)
 - `--workers <int>` — OCR/regex parallelism (default: 2)
 - `--llm-workers <int>` — LLM concurrency; careful with memory (default: 1)
-- `--batch-size <int>` — checkpoint every N docs (default: 10)
+- `--batch-size <int>` — checkpoint every N docs (default: 32)
 - `--resume / --no-resume` — resume from last checkpoint (default: resume)
 - `--keep-artifacts / --no-keep-artifacts` — retain OCR markdown and extraction JSON per doc (default: false)
 - `--lang <str>` — OCR language code (default: `rus+eng`)
 - `--out-run-id <str>` — override auto-generated run ID
+
+Extraction defaults to compact **schema v2** for validation/extraction. Schema v1 remains in code for backward compatibility and archival data.
+
+Retries now include the full schema template in the prompt, and oversized OCR inputs are truncated to a context budget (with warning logs) to reduce malformed/truncated JSON failures.
 
 **Resuming:** progress is saved to `data/processed/validation/runs/<run_id>/results.parquet` every `--batch-size` documents. If interrupted, re-run the same command and already-processed documents will be skipped.
 
@@ -576,7 +580,7 @@ Tests use an in-memory SQLite database and mock the Redis queue + LLM engine —
 | `ADMIN_API_KEY`       | (empty)                        | API key for admin endpoints              |
 | `DEMO_PASSWORD`       | (empty)                        | Streamlit public demo login password     |
 | `LLM_MODEL_PATH`     | `models/qwen3-4b-…q5_k_m.gguf`| Path to GGUF model file                  |
-| `LLM_N_CTX`          | `4096`                         | LLM context window                       |
+| `LLM_N_CTX`          | `6144`                         | LLM context window                       |
 | `LLM_MAX_TOKENS`     | `2048`                         | Max tokens for LLM response              |
 | `LLM_TEMPERATURE`    | `0.0`                          | LLM temperature (0 = deterministic)      |
 | `LLM_THREADS`        | `4`                            | CPU threads for LLM inference            |
@@ -614,7 +618,7 @@ app/
 │   └── paddle.py            # PaddleOCR engine (optional)
 ├── llm/
 │   ├── engine.py            # llama-cpp-python wrapper (singleton)
-│   ├── schemas.py           # ExtractionV1 Pydantic model + validators
+│   ├── schemas.py           # Extraction v1/v2 Pydantic models + validators
 │   ├── prompts.py           # System/user prompt templates
 │   ├── extract.py           # Extraction with retry logic
 │   └── postprocess.py       # Post-extraction normalisation

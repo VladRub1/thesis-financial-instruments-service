@@ -203,7 +203,7 @@ def main() -> None:
     rp.add_argument("--resume", action="store_true", default=True,
                      help="Resume from checkpoint (default: true)")
     rp.add_argument("--no-resume", dest="resume", action="store_false")
-    rp.add_argument("--batch-size", type=int, default=10, help="Checkpoint every N docs (default: 10)")
+    rp.add_argument("--batch-size", type=int, default=32, help="Checkpoint every N docs (default: 32)")
     rp.add_argument("--workers", type=int, default=2, help="OCR parallelism (default: 2)")
     rp.add_argument("--llm-workers", type=int, default=1,
                      help="LLM concurrency — careful with memory (default: 1)")

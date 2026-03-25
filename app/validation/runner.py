@@ -29,6 +29,9 @@ from app.validation.normalize import (
 
 log = get_logger(__name__)
 
+_SUBPROC_LLM = None
+_SUBPROC_LLM_CFG: tuple[str | None, str, int] | None = None
+
 
 @contextmanager
 def _suppress_native_stderr():
@@ -312,23 +315,28 @@ def _run_batch_llm_subprocess(
     keep_artifacts: bool,
     run_id: str,
 ) -> list[dict]:
-    """Subprocess entry: load model once, process items, unload."""
-    from app.llm.engine import LLMEngine
+    """Subprocess entry: reuse process-local model, process items."""
+    global _SUBPROC_LLM, _SUBPROC_LLM_CFG
 
-    llm = LLMEngine(
-        n_gpu_layers=_validation_n_gpu_layers(llm_device, llm_n_gpu_layers),
-        require_gpu_offload=_validation_require_gpu_offload(llm_device, llm_n_gpu_layers),
-    )
-    if llm_model_path:
-        from app.core.config import settings
-        settings.LLM_MODEL_PATH = llm_model_path
-    with _suppress_native_stderr():
-        llm.load()
+    cfg = (llm_model_path, llm_device, llm_n_gpu_layers)
+    if _SUBPROC_LLM is None or _SUBPROC_LLM_CFG != cfg:
+        from app.llm.engine import LLMEngine
+
+        llm = LLMEngine(
+            n_gpu_layers=_validation_n_gpu_layers(llm_device, llm_n_gpu_layers),
+            require_gpu_offload=_validation_require_gpu_offload(llm_device, llm_n_gpu_layers),
+        )
+        if llm_model_path:
+            from app.core.config import settings
+            settings.LLM_MODEL_PATH = llm_model_path
+        with _suppress_native_stderr():
+            llm.load()
+        _SUBPROC_LLM = llm
+        _SUBPROC_LLM_CFG = cfg
 
     results = _process_items_with_llm(
-        items, ocr_engine_name, lang, llm, keep_artifacts, run_id,
+        items, ocr_engine_name, lang, _SUBPROC_LLM, keep_artifacts, run_id,
     )
-    llm.unload()
     return results
 
 
@@ -349,7 +357,7 @@ def run_evaluation(
     keep_artifacts: bool = False,
     workers: int = 2,
     llm_workers: int = 1,
-    batch_size: int = 10,
+    batch_size: int = 32,
     resume: bool = True,
 ) -> pd.DataFrame:
     """Run evaluation pipeline over the seed set.
@@ -430,19 +438,19 @@ def run_evaluation(
 
             llm.unload()
         else:
-            # Parallel LLM workers: each subprocess loads its own model
-            for batch_start in range(0, total, batch_size):
-                batch_items = [
-                    (row["id"], row["stored_path"], row)
-                    for row in pending[batch_start:batch_start + batch_size]
-                ]
-                chunk_size = max(1, len(batch_items) // llm_workers)
-                chunks = [
-                    batch_items[i:i + chunk_size]
-                    for i in range(0, len(batch_items), chunk_size)
-                ]
-                batch_results: list[dict] = []
-                with ProcessPoolExecutor(max_workers=llm_workers) as pool:
+            # Parallel LLM workers: keep subprocesses alive across batches.
+            with ProcessPoolExecutor(max_workers=llm_workers) as pool:
+                for batch_start in range(0, total, batch_size):
+                    batch_items = [
+                        (row["id"], row["stored_path"], row)
+                        for row in pending[batch_start:batch_start + batch_size]
+                    ]
+                    chunk_size = max(1, len(batch_items) // llm_workers)
+                    chunks = [
+                        batch_items[i:i + chunk_size]
+                        for i in range(0, len(batch_items), chunk_size)
+                    ]
+                    batch_results: list[dict] = []
                     futures = {
                         pool.submit(
                             _run_batch_llm_subprocess, chunk, ocr_engine, lang,
@@ -453,10 +461,10 @@ def run_evaluation(
                     for fut in as_completed(futures):
                         batch_results.extend(fut.result())
 
-                for r in batch_results:
-                    _on_result(r)
-                all_new_rows.extend(batch_results)
-                storage.append_results(run_id, batch_results)
+                    for r in batch_results:
+                        _on_result(r)
+                    all_new_rows.extend(batch_results)
+                    storage.append_results(run_id, batch_results)
 
     else:
         # Regex: embarrassingly parallel with multiprocessing
