@@ -5,7 +5,10 @@ SYSTEM_PROMPT = """\
 Extract fields from OCR text of Russian bank guarantees.
 Return exactly ONE valid JSON object, no markdown, no prose, no extra keys.
 Use YYYY-MM-DD dates, decimal dot for amount, and null when unknown.
-Do not invent values. INN/IKZ must be digits only.
+Do not invent values.
+INN must be digits only (10 or 12 digits).
+IKZ must be digits only (36 digits).
+If start_date is not specified separately, it is equal to issue_date.
 Currency should be a 3-letter code: RUB, USD, EUR, etc.\
 """
 
