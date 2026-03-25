@@ -14,7 +14,18 @@ import requests
 import streamlit as st
 
 from app.core.config import settings
+from app.llm.schemas import ExtractionV1, ExtractionV2
 from app.ui.login_gate import render_login_gate
+
+
+def _correction_form_field_names(payload: dict) -> list[str]:
+    """Match editable fields to extraction schema (v2 default; v1 for legacy jobs)."""
+    ver = str(payload.get("schema_version") or "").strip().lower()
+    if ver == "v1":
+        skip = {"schema_version", "evidence", "warnings"}
+        return [k for k in ExtractionV1.model_fields if k not in skip]
+    skip = {"schema_version"}
+    return [k for k in ExtractionV2.model_fields if k not in skip]
 
 st.set_page_config(
     page_title="Document AI — Bank Guarantees",
@@ -150,15 +161,10 @@ def show_correction_form(job_id: str) -> None:
         return
 
     st.subheader("Submit corrections")
-    EDITABLE = [
-        "guarantee_number", "issue_date", "start_date", "end_date",
-        "amount", "currency", "principal_inn", "beneficiary_inn",
-        "contract_number", "contract_date", "contract_name", "ikz",
-        "bank_name", "bank_bic", "registry_number", "claim_period_days",
-    ]
+    editable = _correction_form_field_names(current)
     with st.form(key=f"corrections_{job_id}"):
         fields: dict = {}
-        for key in EDITABLE:
+        for key in editable:
             val = current.get(key)
             fields[key] = st.text_input(key, value="" if val is None else str(val))
 
