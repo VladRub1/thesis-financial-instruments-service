@@ -152,6 +152,8 @@ docker compose up -d postgres redis
 # Option B: use local Postgres + Redis
 ```
 
+Note: in Option A, Redis must be reachable from the host at `localhost:6379` (used by local `uv run` processes). If your worker/API logs show `Connection refused` for Redis, ensure the `redis` service publishes `127.0.0.1:6379:6379` in `docker-compose.yml`.
+
 ### 4. Run database migrations
 
 ```bash
