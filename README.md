@@ -27,23 +27,42 @@ The demo is password-gated (macOS-style login window with random ASCII art and h
 
 **Login gate:**
 
-<!-- TODO: screenshot of the login window -->
-![Login gate](screenshots/login_gate.png)
+This is what the user should see after opening service. Password is set in `.env` file.
+The password for the service deployed on the website https://thesis-guarantee.ru/ can be obtained directly from the author.
+
+![Login gate](screenshots/authorization_window.png)
 
 **Main interface — OCR + extraction results:**
 
-<!-- TODO:  screenshot of the main interface with results -->
-![Main interface](screenshots/main_interface.png)
+Main interface and Upload tab:
 
-**Upload tab — document preview before processing:**
+![Main interface](screenshots/start_window.png)
 
-<!-- TODO:  screenshot of the upload tab with PDF preview -->
-![Upload tab](screenshots/upload_tab.png)
+Preview of uploaded file before processing (sample file `mcb_1.pdf` is used):
+
+![Document preview](screenshots/document_preview.png)
+
+Button for start processing:
+
+![Button process](screenshots/process_button.png)
+
+Result:
+
+![Result](screenshots/result.png)
 
 **Correction form:**
 
-<!-- TODO:  screenshot of the correction form -->
+Enter corrections: 
+
 ![Correction form](screenshots/correction_form.png)
+
+Submit corrections: 
+
+![Submit correction form](screenshots/submit_correction.png)
+
+**Fetch previous extraction:**
+
+![Fetch result](screenshots/fetch_result.png)
 
 ### Workflow (public demo)
 
