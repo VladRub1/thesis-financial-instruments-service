@@ -23,6 +23,21 @@ Features available in the public demo:
 
 The demo is password-gated (macOS-style login window with random ASCII art and haiku). The FastAPI API is not exposed publicly.
 
+### Workflow (public demo)
+
+1. **Log in** — enter the demo password in the macOS-style login window.
+2. **Configure** — choose pipeline (`ocr+extract` or `ocr_only`), OCR engine (`tesseract` / `paddleocr`), and language in the sidebar.
+3. **Upload a PDF** — select a scanned bank guarantee document. A preview of up to 4 pages is shown immediately.
+4. **Process** — click "Process uploaded file". A progress bar tracks the job through `queued → running → succeeded`.
+5. **Review results** — the left column shows OCR text (Markdown), the right column shows extracted JSON fields.
+6. **Correct** — if any fields are wrong, edit them in the correction form and submit. Each correction is versioned.
+7. **Look up past jobs** — switch to the "Job results" tab and enter a job ID to retrieve earlier results.
+8. **Lock demo** — click "Lock demo" in the sidebar to return to the login gate.
+
+Processing typically takes **2–3 minutes per document** on CPU. If the worker is busy, jobs wait in queue.
+
+Below are screenshots clarifying the workflow.
+
 ### Screenshots
 
 **Login gate:**
@@ -63,19 +78,6 @@ Submit corrections:
 **Fetch previous extraction:**
 
 ![Fetch result](screenshots/fetch_result.png)
-
-### Workflow (public demo)
-
-1. **Log in** — enter the demo password in the macOS-style login window.
-2. **Configure** — choose pipeline (`ocr+extract` or `ocr_only`), OCR engine (`tesseract` / `paddleocr`), and language in the sidebar.
-3. **Upload a PDF** — select a scanned bank guarantee document. A preview of up to 4 pages is shown immediately.
-4. **Process** — click "Process uploaded file". A progress bar tracks the job through `queued → running → succeeded`.
-5. **Review results** — the left column shows OCR text (Markdown), the right column shows extracted JSON fields.
-6. **Correct** — if any fields are wrong, edit them in the correction form and submit. Each correction is versioned.
-7. **Look up past jobs** — switch to the "Job results" tab and enter a job ID to retrieve earlier results.
-8. **Lock demo** — click "Lock demo" in the sidebar to return to the login gate.
-
-Processing typically takes **2–3 minutes per document** on CPU. If the worker is busy, jobs wait in queue.
 
 ## Runtime Architecture
 
