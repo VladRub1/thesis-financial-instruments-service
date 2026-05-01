@@ -354,7 +354,7 @@ A standalone CLI subsystem for systematic evaluation of OCR + extraction quality
 
 ### What it does
 
-1. **Samples** N documents reproducibly from `dataset.csv` (~33k bank guarantee records).
+1. **Samples** N documents reproducibly from `dataset.csv` (~465k bank guarantee records).
 2. **Processes** each document through a configurable pipeline: OCR engine + extractor (LLM or regex baseline).
 3. **Normalises** both predictions and gold values (digits-only for INNs/IKZ, ISO dates, currency codes, robust float parsing).
 4. **Computes metrics** — field-level exact match, slot-filling P/R/F1, Doc-EM, edit similarity, digit accuracy, amount MAE, latency percentiles, weighted scores.
